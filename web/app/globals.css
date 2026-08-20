@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+/* Kid-vibrant palette — brighter, more varied than the logo's raw tones,
+   built for high-contrast, playful UI rather than an adult brand page. */
+:root {
+  --background: #fffbf0;
+  --foreground: #33254a;
+  --surface: #ffffff;
+  --border: #ffe1b3;
+
+  --brand-pink: #ff4d8d;
+  --brand-orange: #ff9f1c;
+  --brand-yellow: #ffd23f;
+  --brand-blue: #2ec4f1;
+  --brand-green: #3ecf6d;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-brand-pink: var(--brand-pink);
+  --color-brand-orange: var(--brand-orange);
+  --color-brand-yellow: var(--brand-yellow);
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-green: var(--brand-green);
+  --font-sans: var(--font-hind);
+  --font-display: var(--font-modak);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #241b36;
+    --foreground: #fff3d6;
+    --surface: #322546;
+    --border: #4a3564;
+    --brand-pink: #ff6fa0;
+    --brand-orange: #ffb238;
+    --brand-yellow: #ffdb6d;
+    --brand-blue: #5ad1fa;
+    --brand-green: #57dd84;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

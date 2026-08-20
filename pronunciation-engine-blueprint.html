@@ -1,0 +1,605 @@
+<!-- Title set below in <head> equivalent via <title> tag -->
+<title>Pronunciation Engine Blueprint</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #f5f5f8;
+    --surface: #ffffff;
+    --surface-sunken: #eeeef4;
+    --ink: #201f2e;
+    --ink-soft: #4b4a5e;
+    --ink-faint: #86849c;
+    --rule: #dcdbe6;
+    --rule-strong: #b9b8cc;
+    --accent: #423e99;
+    --accent-ink: #ffffff;
+    --accent-tint: #eceafc;
+    --turmeric: #b4740e;
+    --turmeric-tint: #fbf0dc;
+    --ok: #3d7a5c;
+    --ok-tint: #e5f2ec;
+    --warn: #a15b1f;
+    --warn-tint: #f8ecdd;
+    --font-display: "IBM Plex Serif", Georgia, "Noto Serif Devanagari", serif;
+    --font-body: "IBM Plex Sans", "Segoe UI", "Noto Sans Devanagari", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16151f;
+      --surface: #1d1c29;
+      --surface-sunken: #131219;
+      --ink: #eeedf7;
+      --ink-soft: #b4b2c8;
+      --ink-faint: #7d7b92;
+      --rule: #322f45;
+      --rule-strong: #45415e;
+      --accent: #9b95e8;
+      --accent-ink: #16151f;
+      --accent-tint: #26234a;
+      --turmeric: #e3ab54;
+      --turmeric-tint: #332615;
+      --ok: #7fc4a3;
+      --ok-tint: #17281f;
+      --warn: #e0a15d;
+      --warn-tint: #332415;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #16151f;
+    --surface: #1d1c29;
+    --surface-sunken: #131219;
+    --ink: #eeedf7;
+    --ink-soft: #b4b2c8;
+    --ink-faint: #7d7b92;
+    --rule: #322f45;
+    --rule-strong: #45415e;
+    --accent: #9b95e8;
+    --accent-ink: #16151f;
+    --accent-tint: #26234a;
+    --turmeric: #e3ab54;
+    --turmeric-tint: #332615;
+    --ok: #7fc4a3;
+    --ok-tint: #17281f;
+    --warn: #e0a15d;
+    --warn-tint: #332415;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0 24px 96px;
+  }
+
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .page {
+    max-width: 920px;
+    margin: 0 auto;
+  }
+
+  /* ---------- Masthead ---------- */
+  .masthead {
+    padding: 64px 0 40px;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 48px;
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .eyebrow::before {
+    content: "";
+    width: 22px;
+    height: 1px;
+    background: var(--accent);
+    display: inline-block;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(32px, 4.5vw, 46px);
+    line-height: 1.12;
+    letter-spacing: -0.01em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+    max-width: 16ch;
+  }
+  .dek {
+    font-size: 17px;
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin: 0 0 24px;
+  }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-faint);
+  }
+  .meta-row span b { color: var(--ink-soft); font-weight: 500; }
+
+  /* ---------- Section scaffolding ---------- */
+  section { margin-bottom: 56px; }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    border-left: 3px solid var(--accent);
+    padding-left: 16px;
+    margin-bottom: 20px;
+  }
+  .section-num {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-faint);
+  }
+  h2 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 23px;
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+  .section-body { padding-left: 19px; }
+  p { max-width: 66ch; margin: 0 0 14px; }
+  .lede { color: var(--ink-soft); }
+
+  h3 {
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 15px;
+    margin: 28px 0 10px;
+    color: var(--ink);
+  }
+
+  /* ---------- Evidence list ---------- */
+  .evidence {
+    list-style: none;
+    margin: 0 0 8px;
+    padding: 0;
+    display: grid;
+    gap: 10px;
+  }
+  .evidence li {
+    display: grid;
+    grid-template-columns: 108px 1fr;
+    gap: 16px;
+    font-size: 14.5px;
+    align-items: baseline;
+  }
+  .evidence .tag {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent);
+  }
+  .evidence code {
+    background: var(--surface-sunken);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 12.5px;
+  }
+
+  /* ---------- Tables ---------- */
+  .table-wrap { overflow-x: auto; margin: 0 0 8px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14.5px;
+    min-width: 560px;
+  }
+  th, td {
+    text-align: left;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  th {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    border-bottom: 1px solid var(--rule-strong);
+  }
+  td.num, th.num { font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+  tr:last-child td { border-bottom: none; }
+  .row-highlight td { background: var(--accent-tint); }
+  .row-highlight td:first-child { position: relative; }
+
+  /* ---------- Chips ---------- */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .chip-ai { background: var(--accent-tint); color: var(--accent); }
+  .chip-db { background: var(--surface-sunken); color: var(--ink-soft); }
+  .chip-free { background: var(--ok-tint); color: var(--ok); }
+  .chip-paid { background: var(--warn-tint); color: var(--warn); }
+
+  /* ---------- Recommendation callout ---------- */
+  .callout {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--turmeric);
+    border-radius: 4px;
+    padding: 20px 22px;
+    margin: 22px 0;
+  }
+  .callout .callout-label {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--turmeric);
+    margin-bottom: 8px;
+    display: block;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout p { max-width: none; }
+
+  /* ---------- Schema block ---------- */
+  .schema {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+  }
+  .schema-table {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .schema-table .t-name {
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 8px;
+    display: block;
+  }
+  .schema-table ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-soft);
+    display: grid;
+    gap: 4px;
+  }
+  .schema-table .fk { color: var(--turmeric); }
+
+  /* ---------- Checklist ---------- */
+  .checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .checklist li {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    gap: 12px;
+    font-size: 14.5px;
+    max-width: 66ch;
+  }
+  .checklist .box {
+    width: 16px; height: 16px;
+    border: 1.5px solid var(--rule-strong);
+    border-radius: 3px;
+    margin-top: 2px;
+  }
+  .checklist b { color: var(--ink); }
+
+  /* ---------- Cost line ---------- */
+  .cost-total {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid var(--rule-strong);
+  }
+  .cost-total .amount {
+    font-family: var(--font-mono);
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--ok);
+  }
+  .cost-total .label { color: var(--ink-soft); font-size: 14px; }
+
+  /* ---------- Footer ---------- */
+  footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-faint);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+  }
+  footer a { color: var(--ink-faint); }
+
+  @media (max-width: 560px) {
+    .evidence li { grid-template-columns: 1fr; gap: 2px; }
+    body { padding: 0 16px 72px; }
+    .masthead { padding: 40px 0 32px; }
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="eyebrow">Architecture spec · draft 1</div>
+    <h1>Pronunciation Engine Blueprint</h1>
+    <p class="dek">A build plan for a Hindi reading-practice prototype, modeled on the module structure and stack of thehindilab.com — scoped for zero-cost tiers throughout.</p>
+    <div class="meta-row">
+      <span>Prepared <b>18 Aug 2026</b></span>
+      <span>Reference site <b>thehindilab.com</b></span>
+      <span>Target locale <b>hi-IN</b></span>
+      <span>Status <b>awaiting brand + scope sign-off</b></span>
+    </div>
+  </header>
+
+  <section>
+    <div class="section-head">
+      <span class="section-num">01</span>
+      <h2>What the reference site actually runs on</h2>
+    </div>
+    <div class="section-body">
+      <p class="lede">Pulled from the live HTML and JS bundles directly, not inferred from the marketing page.</p>
+      <ul class="evidence">
+        <li><span class="tag">Frontend</span> <span>Next.js, App Router — <code>/_next/static/chunks/app/page-*.js</code>, <code>app/layout-*.js</code></span></li>
+        <li><span class="tag">Backend</span> <span>Supabase — asset URLs resolve to <code>*.supabase.co/storage/v1/object/public/…</code>; auth routes follow Supabase's convention (<code>/auth/login</code>, <code>/auth/signup</code>)</span></li>
+        <li><span class="tag">Fonts</span> <span>Google Fonts, loaded via <code>fonts.googleapis.com/css2</code></span></li>
+        <li><span class="tag">AI voice</span> <span>Not visible client-side — scoring runs behind auth, server-side. Marketing copy confirms the Reading Aloud module returns pronunciation, fluency, and pace scores, which rules out plain transcription.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="section-num">02</span>
+      <h2>Recommended stack for the prototype</h2>
+    </div>
+    <div class="section-body">
+      <p>Same shape as the reference site — it's a good fit for a solo-buildable prototype with generous free tiers at every layer.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Layer</th><th>Choice</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td>Frontend</td><td>Next.js (App Router) + Tailwind</td><td>Fast to theme once the logo/palette lands; matches the reference architecture</td></tr>
+            <tr><td>Backend</td><td>Supabase (Postgres, Auth, Storage, Edge Functions)</td><td>Free tier covers a prototype's auth, DB, and audio-file storage in one place</td></tr>
+            <tr><td>AI voice module</td><td>Azure AI Speech — Pronunciation Assessment</td><td>Only free option that returns real accuracy/fluency scores, not just a transcript — see §04</td></tr>
+            <tr><td>Hosting</td><td>Vercel (frontend) + Supabase Cloud (backend)</td><td>Both free at prototype scale, zero infra to manage</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="section-num">03</span>
+      <h2>Module map</h2>
+    </div>
+    <div class="section-body">
+      <p class="lede">Of the six modules on the reference site, only one needs the AI voice module. The rest are content + database work.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Module</th><th>Needs</th><th>What it takes</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Reading Aloud</td>
+              <td><span class="chip chip-ai">AI voice</span></td>
+              <td>Azure Pronunciation Assessment on a recorded passage read</td>
+            </tr>
+            <tr>
+              <td>Picture Description</td>
+              <td><span class="chip chip-db">DB + optional AI</span></td>
+              <td>Stored model answers to start; an LLM feedback pass can come later without blocking launch</td>
+            </tr>
+            <tr>
+              <td>शब्द शक्ति (vocab quiz)</td>
+              <td><span class="chip chip-db">DB only</span></td>
+              <td>Word bank table + a quiz UI, no AI involved</td>
+            </tr>
+            <tr>
+              <td>आज के मुहावरे (idioms)</td>
+              <td><span class="chip chip-db">DB only</span></td>
+              <td>Static content table, rotated daily</td>
+            </tr>
+            <tr>
+              <td>शब्द चुनौती (challenges)</td>
+              <td><span class="chip chip-db">DB only</span></td>
+              <td>Same shape as the vocab quiz, different question types</td>
+            </tr>
+            <tr>
+              <td>My Dictionary</td>
+              <td><span class="chip chip-db">DB only</span></td>
+              <td>Per-user saved-words table, populated from the other modules</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="section-num">04</span>
+      <h2>The AI voice module, decided</h2>
+      <span class="chip chip-paid">Revised — no-card constraint</span>
+    </div>
+    <div class="section-body">
+      <p class="lede">Azure's F0 tier asks for a card at signup for identity verification only — it won't auto-charge unless the resource is manually upgraded off F0. If a card anywhere is still a hard no, the field narrows fast once you also filter for Hindi support.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Option</th><th>Card to sign up</th><th>Hindi support</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Azure AI Speech — Pronunciation Assessment</td>
+              <td><span class="chip chip-paid">Card — verify only, F0 never auto-bills</span></td>
+              <td>Yes — <code>hi-IN</code> confirmed</td>
+            </tr>
+            <tr>
+              <td>SpeechAce (dedicated pronunciation API)</td>
+              <td><span class="chip chip-free">No card</span></td>
+              <td>No — en, fr, es only</td>
+            </tr>
+            <tr>
+              <td>AssemblyAI</td>
+              <td><span class="chip chip-free">No card, $50 credit</span></td>
+              <td>No — not in their language list</td>
+            </tr>
+            <tr>
+              <td>Deepgram</td>
+              <td><span class="chip chip-free">No card, $200 credit</span></td>
+              <td>Yes</td>
+            </tr>
+            <tr>
+              <td>Self-hosted Whisper (Hindi-tuned)</td>
+              <td><span class="chip chip-free">No card, no account at all</span></td>
+              <td>Yes — best Hindi accuracy of the no-card options</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>SpeechAce and AssemblyAI are out immediately — SpeechAce is purpose-built for exactly this (phoneme-level pronunciation scoring) but has no Hindi at all, and AssemblyAI doesn't list Hindi either. That leaves Deepgram and self-hosted Whisper as the only no-card options that work for Hindi — and neither returns a pronunciation/fluency score out of the box the way Azure and SpeechAce do. Both are transcription engines; the accuracy score has to be built on top, by comparing the recognized text against the expected passage.</p>
+
+      <h3>Between the two no-card finalists</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Option</th><th>Pronunciation accuracy</th><th>Effort</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Deepgram (hosted API)</td>
+              <td>Word-level transcript + confidence only — score built from edit-distance vs. the expected passage</td>
+              <td>Medium — no model hosting, but scoring logic still custom</td>
+            </tr>
+            <tr class="row-highlight">
+              <td>Self-hosted <code>vasista22/whisper-hindi-large-v2</code></td>
+              <td>Most accurate Hindi transcript of the no-card options — fine-tuned on Hindi corpora, not generic multilingual Whisper — same custom scoring approach as Deepgram, but a better transcript to score against</td>
+              <td>High — you host the model yourself</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <span class="callout-label">Recommendation</span>
+        <p><b>Self-hosted <code>vasista22/whisper-hindi-large-v2</code>, no account or card required.</b> It's the most Hindi-accurate free option among everything here that doesn't need a card, since it's fine-tuned specifically on Hindi speech rather than generic multilingual Whisper. Pair it with a custom scorer for v1: align the recognized text to the expected passage and score by edit-distance plus per-word confidence — a reasonable proxy, not true phoneme-level scoring.</p>
+        <p>Deepgram is the easier fallback if you'd rather not manage model hosting — same no-card, Hindi-capable profile, $200 free credit, hosted API — at the cost of the same scoring gap.</p>
+        <p>If this prototype turns into something you'll actually ship, Azure's Pronunciation Assessment is still the only genuinely plug-and-play option that returns real phoneme/fluency/completeness scores for Hindi — worth revisiting then, since the card costs nothing as long as the resource stays on F0.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="section-num">05</span>
+      <h2>Data model sketch</h2>
+    </div>
+    <div class="section-body">
+      <p class="lede">Supabase/Postgres, minimum viable shape.</p>
+      <div class="schema">
+        <div class="schema-table">
+          <span class="t-name">passages</span>
+          <ul><li>id</li><li>text_hi</li><li>audio_model_url</li><li>difficulty</li></ul>
+        </div>
+        <div class="schema-table">
+          <span class="t-name">attempts</span>
+          <ul><li>id</li><li class="fk">user_id → auth.users</li><li class="fk">passage_id → passages</li><li>audio_url</li><li>accuracy_score</li><li>fluency_score</li><li>completeness_score</li><li>created_at</li></ul>
+        </div>
+        <div class="schema-table">
+          <span class="t-name">vocab_words</span>
+          <ul><li>id</li><li>word_hi</li><li>meaning</li><li>audio_url</li></ul>
+        </div>
+        <div class="schema-table">
+          <span class="t-name">dictionary_entries</span>
+          <ul><li>id</li><li class="fk">user_id → auth.users</li><li class="fk">word_id → vocab_words</li><li>source_module</li><li>saved_at</li></ul>
+        </div>
+        <div class="schema-table">
+          <span class="t-name">subscriptions</span>
+          <ul><li>id</li><li class="fk">user_id → auth.users</li><li>plan</li><li>status</li><li>billing_cycle</li></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="section-num">06</span>
+      <h2>Cost at prototype scale</h2>
+    </div>
+    <div class="section-body">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Service</th><th>Free allowance</th><th>Where cost starts</th></tr></thead>
+          <tbody>
+            <tr><td>Vercel</td><td>Hobby tier</td><td>Commercial use at scale / team seats</td></tr>
+            <tr><td>Supabase</td><td>500 MB DB, 1 GB storage, 50k MAU auth</td><td>Audio storage growth past 1 GB, or DB past 500 MB</td></tr>
+            <tr><td>Azure Speech (F0)</td><td>5 audio-hours/month</td><td>~$1.32/hour beyond the free quota (standard STT rate)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="cost-total">
+        <span class="amount">$0</span>
+        <span class="label">/ month for a demo-scale prototype, before any of these limits are hit</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="section-num">07</span>
+      <h2>Open before I start scaffolding</h2>
+    </div>
+    <div class="section-body">
+      <ul class="checklist">
+        <li><span class="box"></span><span><b>Logo + brand colors</b> — I'll pull the palette and typography direction from it and apply it to the theme.</span></li>
+        <li><span class="box"></span><span><b>Company name and scope</b> — full six-module parity, or a smaller MVP subset (Reading Aloud + one or two others)?</span></li>
+        <li><span class="box"></span><span><b>Azure account</b> — you'll need a free Azure account to generate a Speech resource key; I can walk through that step when we get there.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    <span>Sources —</span>
+    <a href="https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?tabs=pronunciation-assessment">Azure Speech language support</a>
+    <a href="https://azure.microsoft.com/en-us/pricing/details/cognitive-services/speech-services/">Azure Speech pricing</a>
+    <a href="https://www.thehindilab.com/">thehindilab.com</a>
+  </footer>
+
+</div>
