@@ -43,18 +43,21 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 px-6">
-      <div className="relative w-full max-w-sm rounded-3xl border-2 border-brand-blue bg-surface p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 px-6 backdrop-blur-sm">
+      <div className="card relative w-full max-w-sm p-6 shadow-2xl">
         <button
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-4 top-4 text-foreground/40"
+          className="icon-btn clr-blue absolute right-4 top-4 h-8 w-8 text-sm"
         >
           ✕
         </button>
 
         {step === "form" && (
           <form onSubmit={submitForm} className="flex flex-col gap-3">
+            <span className="icon-badge h-11 w-11 bg-brand-blue/15 text-xl">
+              🔐
+            </span>
             <h2 className="font-[family-name:var(--font-display)] text-xl text-brand-blue">
               Save your streak
             </h2>
@@ -66,7 +69,7 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
               placeholder="Your name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="rounded-xl border-2 border-border bg-background px-3 py-2 text-foreground"
+              className="rounded-xl border-2 border-border bg-background px-3 py-2 text-foreground outline-none transition-colors focus:border-brand-blue"
             />
             <input
               required
@@ -74,12 +77,12 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="rounded-xl border-2 border-border bg-background px-3 py-2 text-foreground"
+              className="rounded-xl border-2 border-border bg-background px-3 py-2 text-foreground outline-none transition-colors focus:border-brand-blue"
             />
             {error && <p className="text-sm font-semibold text-brand-pink">{error}</p>}
             <button
               disabled={busy}
-              className="mt-1 rounded-full bg-brand-blue px-4 py-2 font-bold text-white disabled:opacity-50"
+              className="btn btn-solid clr-blue mt-1 w-full text-sm"
             >
               {busy ? "Sending…" : "Send code"}
             </button>
@@ -88,6 +91,9 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
 
         {step === "otp" && (
           <form onSubmit={submitOtp} className="flex flex-col gap-3">
+            <span className="icon-badge h-11 w-11 bg-brand-blue/15 text-xl">
+              ✉️
+            </span>
             <h2 className="font-[family-name:var(--font-display)] text-xl text-brand-blue">
               Check your email
             </h2>
@@ -100,12 +106,12 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
               placeholder="123456"
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
-              className="rounded-xl border-2 border-border bg-background px-3 py-2 text-center text-lg tracking-widest text-foreground"
+              className="rounded-xl border-2 border-border bg-background px-3 py-2 text-center text-lg tracking-widest text-foreground outline-none transition-colors focus:border-brand-blue"
             />
             {error && <p className="text-sm font-semibold text-brand-pink">{error}</p>}
             <button
               disabled={busy}
-              className="mt-1 rounded-full bg-brand-blue px-4 py-2 font-bold text-white disabled:opacity-50"
+              className="btn btn-solid clr-blue mt-1 w-full text-sm"
             >
               {busy ? "Checking…" : "Confirm"}
             </button>
@@ -113,9 +119,14 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
         )}
 
         {step === "success" && (
-          <p className="py-6 text-center text-lg font-bold text-brand-green">
-            You&apos;re all set! 🎉
-          </p>
+          <div className="py-4 text-center">
+            <span className="icon-badge float mx-auto h-14 w-14 bg-brand-green/15 text-3xl">
+              🎉
+            </span>
+            <p className="mt-3 text-lg font-bold text-brand-green">
+              You&apos;re all set!
+            </p>
+          </div>
         )}
       </div>
     </div>

@@ -19,7 +19,7 @@ export function AccountControl() {
         </span>
         <button
           onClick={signOut}
-          className="text-foreground/40 underline underline-offset-2"
+          className="text-foreground/40 underline underline-offset-2 hover:text-foreground/60"
         >
           Sign out
         </button>
@@ -31,7 +31,7 @@ export function AccountControl() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="rounded-full border-2 border-brand-blue px-3 py-1.5 text-sm font-bold text-brand-blue"
+        className="btn btn-outline clr-blue text-sm"
       >
         Save progress
       </button>

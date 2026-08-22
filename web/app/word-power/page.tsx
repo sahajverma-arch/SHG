@@ -69,11 +69,11 @@ export default function WordPowerPage() {
 
   if (finished) {
     return (
-      <main className="mx-auto max-w-2xl px-6 py-16">
-        <Celebrate message={`शाबाश! You scored ${score} / ${order.length} 🎉`} />
+      <main className="mx-auto max-w-2xl px-6 py-14">
+        <Celebrate message={`शाबाश! You scored ${score} / ${order.length}`} />
         <button
           onClick={playAgain}
-          className="mx-auto mt-6 block rounded-full bg-brand-blue px-6 py-2 text-sm font-bold text-white"
+          className="btn btn-solid clr-blue mx-auto mt-6 block text-sm"
         >
           Play again
         </button>
@@ -82,17 +82,39 @@ export default function WordPowerPage() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-16">
-      <h1 className="font-[family-name:var(--font-display)] text-2xl text-brand-blue">
-        शब्द शक्ति
-      </h1>
-      <p className="mt-2 text-sm text-foreground/60">
-        Question {index + 1} of {order.length}
-      </p>
+    <main className="mx-auto max-w-2xl px-6 py-14">
+      <div className="flex items-center gap-3">
+        <span className="icon-badge h-11 w-11 bg-brand-blue/15 text-xl">
+          🧩
+        </span>
+        <div>
+          <h1 className="font-[family-name:var(--font-display)] text-2xl text-brand-blue">
+            शब्द शक्ति
+          </h1>
+          <p className="text-sm text-foreground/60">
+            Question {index + 1} of {order.length}
+          </p>
+        </div>
+      </div>
 
-      <p className="mt-8 rounded-3xl border-2 border-brand-blue bg-brand-blue/10 p-8 text-center text-4xl font-bold text-foreground">
-        {question.word}
-      </p>
+      <div className="mt-2 flex gap-1.5">
+        {order.map((_, i) => (
+          <span
+            key={i}
+            className={`h-1.5 flex-1 rounded-full transition-colors ${
+              i < index
+                ? "bg-brand-blue"
+                : i === index
+                  ? "bg-brand-blue/50"
+                  : "bg-border"
+            }`}
+          />
+        ))}
+      </div>
+
+      <div className="card mt-6 p-8 text-center">
+        <p className="text-4xl font-bold text-foreground">{question.word}</p>
+      </div>
 
       <div className="mt-6 grid grid-cols-2 gap-3">
         {shuffledOptions.map((option) => {
@@ -101,19 +123,19 @@ export default function WordPowerPage() {
           const revealed = selected !== null;
 
           const stateClass = !revealed
-            ? "border-border bg-surface hover:border-brand-blue"
+            ? "btn-outline clr-blue"
             : isCorrect
-              ? "border-brand-green bg-brand-green/15 text-brand-green"
+              ? "btn-solid clr-green"
               : isPicked
-                ? "border-brand-pink bg-brand-pink/15 text-brand-pink"
-                : "border-border bg-surface opacity-50";
+                ? "btn-solid clr-pink"
+                : "btn-outline clr-blue opacity-40";
 
           return (
             <button
               key={option}
               onClick={() => choose(option)}
               disabled={revealed}
-              className={`rounded-2xl border-2 px-4 py-4 text-base font-semibold transition-colors ${stateClass}`}
+              className={`btn ${stateClass} w-full text-base`}
             >
               {option}
             </button>

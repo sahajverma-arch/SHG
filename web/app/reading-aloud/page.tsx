@@ -20,6 +20,7 @@ export default function ReadingAloudPage() {
   const [status, setStatus] = useState<Status>("idle");
   const [result, setResult] = useState<ScoreResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [speaking, setSpeaking] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -36,6 +37,27 @@ export default function ReadingAloudPage() {
         }
       });
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    };
+  }, []);
+
+  function speakPassage() {
+    if (!("speechSynthesis" in window)) {
+      setError("Text-to-speech isn't supported in this browser.");
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(passage.text_hi);
+    utterance.lang = "hi-IN";
+    utterance.rate = 0.9;
+    utterance.onstart = () => setSpeaking(true);
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+  }
 
   async function startRecording() {
     setError(null);
@@ -86,17 +108,43 @@ export default function ReadingAloudPage() {
   const recording = status === "recording";
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-16">
-      <h1 className="font-[family-name:var(--font-display)] text-2xl text-brand-pink">
-        Reading Aloud
-      </h1>
-      <p className="mt-2 text-sm text-foreground/60">
-        Read the line below, then record yourself.
-      </p>
+    <main className="mx-auto max-w-2xl px-6 py-14">
+      <div className="flex items-center gap-3">
+        <span className="icon-badge h-11 w-11 bg-brand-pink/15 text-xl">
+          🎙️
+        </span>
+        <div>
+          <h1 className="font-[family-name:var(--font-display)] text-2xl text-brand-pink">
+            Reading Aloud
+          </h1>
+          <p className="text-sm text-foreground/60">
+            Read the line below, then record yourself.
+          </p>
+        </div>
+      </div>
 
-      <p className="mt-8 rounded-3xl border-2 border-brand-pink bg-brand-pink/10 p-8 text-center text-2xl font-bold leading-relaxed text-foreground">
-        {passage.text_hi}
-      </p>
+      <div className="mt-8 flex justify-center">
+        <button
+          onClick={speakPassage}
+          disabled={speaking || recording}
+          aria-label="Listen to the line"
+          className="icon-btn clr-pink h-14 w-14 text-2xl"
+        >
+          {speaking ? "🔊" : "🔈"}
+        </button>
+      </div>
+
+      <div className="card relative mt-4 overflow-hidden p-8 text-center">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -left-2 -top-6 font-[family-name:var(--font-display)] text-8xl text-brand-pink/10"
+        >
+          “
+        </span>
+        <p className="relative text-2xl font-bold leading-relaxed text-foreground">
+          {passage.text_hi}
+        </p>
+      </div>
 
       {status !== "done" && (
         <div className="mt-6 flex justify-center">
@@ -104,16 +152,17 @@ export default function ReadingAloudPage() {
             <button
               onClick={startRecording}
               disabled={status === "scoring"}
-              className="rounded-full bg-brand-pink px-6 py-3 text-base font-bold text-white disabled:opacity-50"
+              className="btn btn-solid clr-pink text-base"
             >
-              {status === "scoring" ? "Scoring…" : "🎙️ Record"}
+              <span aria-hidden>🎙️</span>
+              {status === "scoring" ? "Scoring…" : "Record"}
             </button>
           ) : (
             <button
               onClick={stopRecording}
-              className="rounded-full bg-brand-orange px-6 py-3 text-base font-bold text-white"
+              className="btn btn-solid clr-orange animate-pulse text-base"
             >
-              ⏹ Stop
+              <span aria-hidden>⏹</span> Stop
             </button>
           )}
         </div>
@@ -126,20 +175,42 @@ export default function ReadingAloudPage() {
       )}
 
       {result && (
-        <div className="mt-8 space-y-6">
-          <Celebrate message="शाबाश! Great reading 🎉" />
+        <div className="mt-8 space-y-5">
+          <Celebrate message="शाबाश! Great reading" />
 
           <div className="grid grid-cols-3 gap-3 text-center">
-            <Stat label="Accuracy" value={`${result.accuracy_score}%`} color="brand-green" />
-            <Stat label="Fluency" value={`${result.fluency_score}%`} color="brand-blue" />
-            <Stat label="Pace" value={`${result.words_per_minute} wpm`} color="brand-yellow" />
+            <Stat
+              icon="🎯"
+              label="Accuracy"
+              value={`${result.accuracy_score}%`}
+              color="brand-green"
+            />
+            <Stat
+              icon="🌊"
+              label="Fluency"
+              value={`${result.fluency_score}%`}
+              color="brand-blue"
+            />
+            <Stat
+              icon="⏱️"
+              label="Pace"
+              value={`${result.words_per_minute} wpm`}
+              color="brand-yellow"
+            />
           </div>
 
-          <div>
-            <p className="text-sm font-semibold text-foreground/70">
-              Word-level diff
-            </p>
-            <p className="mt-1 text-lg leading-relaxed">
+          <div className="card p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-bold text-foreground/70">
+                Word-level diff
+              </p>
+              <div className="flex gap-3 text-[11px] font-semibold text-foreground/50">
+                <Legend color="bg-brand-green" label="Match" />
+                <Legend color="bg-brand-orange" label="Close" />
+                <Legend color="bg-foreground/25" label="Missed" />
+              </div>
+            </div>
+            <p className="mt-3 text-lg leading-relaxed">
               {result.word_diff.map((w, i) => (
                 <span key={i} className={diffClass(w.status)}>
                   {w.word}{" "}
@@ -148,14 +219,14 @@ export default function ReadingAloudPage() {
             </p>
           </div>
 
-          <div>
-            <p className="text-sm font-semibold text-foreground/70">Transcript</p>
+          <div className="card p-5">
+            <p className="text-sm font-bold text-foreground/70">Transcript</p>
             <p className="mt-1 text-foreground/60">{result.transcript}</p>
           </div>
 
           <button
             onClick={tryAgain}
-            className="rounded-full bg-brand-pink px-6 py-3 text-base font-bold text-white"
+            className="btn btn-solid clr-pink w-full text-base"
           >
             Try again
           </button>
@@ -165,26 +236,42 @@ export default function ReadingAloudPage() {
   );
 }
 
+function Legend({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className={`h-2 w-2 rounded-full ${color}`} aria-hidden />
+      {label}
+    </span>
+  );
+}
+
 function Stat({
+  icon,
   label,
   value,
   color,
 }: {
+  icon: string;
   label: string;
   value: string;
   color: "brand-green" | "brand-blue" | "brand-yellow";
 }) {
   const colorClass =
     color === "brand-green"
-      ? "border-brand-green text-brand-green"
+      ? "text-brand-green"
       : color === "brand-blue"
-        ? "border-brand-blue text-brand-blue"
-        : "border-brand-yellow text-brand-yellow";
+        ? "text-brand-blue"
+        : "text-brand-yellow";
 
   return (
-    <div className={`rounded-2xl border-2 bg-surface p-4 ${colorClass}`}>
-      <p className="text-2xl font-extrabold tabular-nums">{value}</p>
-      <p className="text-xs font-semibold text-foreground/60">{label}</p>
+    <div className="card flex flex-col items-center gap-1 p-4">
+      <span className="text-xl" aria-hidden>
+        {icon}
+      </span>
+      <p className={`text-2xl font-extrabold tabular-nums ${colorClass}`}>
+        {value}
+      </p>
+      <p className="text-xs font-semibold text-foreground/50">{label}</p>
     </div>
   );
 }

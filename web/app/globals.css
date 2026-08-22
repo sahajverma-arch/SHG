@@ -13,6 +13,8 @@
   --brand-yellow: #ffd23f;
   --brand-blue: #2ec4f1;
   --brand-green: #3ecf6d;
+
+  --shade-mix: 22%;
 }
 
 @theme inline {
@@ -40,13 +42,31 @@
     --brand-yellow: #ffdb6d;
     --brand-blue: #5ad1fa;
     --brand-green: #57dd84;
+
+    --shade-mix: 34%;
   }
 }
 
 body {
-  background: var(--background);
+  min-height: 100dvh;
+  background-color: var(--background);
+  background-image:
+    radial-gradient(circle at 10% 6%, color-mix(in srgb, var(--brand-yellow) 45%, transparent) 0%, transparent 32%),
+    radial-gradient(circle at 92% 2%, color-mix(in srgb, var(--brand-blue) 35%, transparent) 0%, transparent 30%),
+    radial-gradient(circle at 96% 88%, color-mix(in srgb, var(--brand-pink) 28%, transparent) 0%, transparent 34%),
+    radial-gradient(circle at 2% 92%, color-mix(in srgb, var(--brand-green) 26%, transparent) 0%, transparent 30%),
+    radial-gradient(color-mix(in srgb, var(--foreground) 9%, transparent) 1px, transparent 1px);
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat;
+  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 22px 22px;
+  background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--brand-blue) 65%, transparent);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
 }
 
 @keyframes pop {
@@ -63,9 +83,136 @@ body {
   }
 }
 
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px) rotate(-3deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+}
+
+@layer components {
+  /* Depth card — replaces flat border+tint fills everywhere */
+  .card {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 1.75rem;
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.05),
+      0 14px 30px -16px rgba(0, 0, 0, 0.22);
+  }
+
+  /* Circular badge used to hold an emoji/icon with a bit of sculpted depth */
+  .icon-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    box-shadow: inset 0 -3px 0 0 rgba(0, 0, 0, 0.08);
+  }
+
+  /* Color modifiers — set the two custom props every button/icon-btn variant reads */
+  .clr-pink {
+    --btn-color: var(--brand-pink);
+    --btn-shade: color-mix(in srgb, var(--brand-pink) 100%, black var(--shade-mix));
+  }
+  .clr-orange {
+    --btn-color: var(--brand-orange);
+    --btn-shade: color-mix(in srgb, var(--brand-orange) 100%, black var(--shade-mix));
+  }
+  .clr-blue {
+    --btn-color: var(--brand-blue);
+    --btn-shade: color-mix(in srgb, var(--brand-blue) 100%, black var(--shade-mix));
+  }
+  .clr-green {
+    --btn-color: var(--brand-green);
+    --btn-shade: color-mix(in srgb, var(--brand-green) 100%, black var(--shade-mix));
+  }
+
+  /* Tactile "press down" button — solid fill, offset shadow doubles as a bottom edge */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 700;
+    border-radius: 1rem;
+    white-space: nowrap;
+    user-select: none;
+    transition:
+      transform 0.12s ease,
+      box-shadow 0.12s ease,
+      filter 0.12s ease,
+      opacity 0.12s ease;
+  }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn:not(:disabled):hover {
+    filter: brightness(1.05);
+  }
+
+  .btn-solid {
+    background: var(--btn-color);
+    color: white;
+    padding: 0.875rem 1.75rem;
+    box-shadow: 0 4px 0 0 var(--btn-shade);
+  }
+  .btn-solid:not(:disabled):active {
+    transform: translateY(3px);
+    box-shadow: 0 1px 0 0 var(--btn-shade);
+  }
+
+  .btn-outline {
+    background: var(--surface);
+    border: 2px solid var(--btn-color);
+    color: var(--btn-color);
+    padding: 0.625rem 1.25rem;
+    box-shadow: 0 3px 0 0 var(--btn-shade);
+  }
+  .btn-outline:not(:disabled):active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 0 var(--btn-shade);
+  }
+
+  /* Circular icon-only tactile button (speaker, close, etc.) */
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    background: var(--surface);
+    border: 2px solid var(--btn-color);
+    color: var(--btn-color);
+    box-shadow: 0 3px 0 0 var(--btn-shade);
+    transition:
+      transform 0.12s ease,
+      box-shadow 0.12s ease,
+      filter 0.12s ease;
+  }
+  .icon-btn:not(:disabled):hover {
+    filter: brightness(1.05);
+  }
+  .icon-btn:not(:disabled):active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 0 var(--btn-shade);
+  }
+  .icon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .float {
+    animation: float 3.2s ease-in-out infinite;
   }
 }

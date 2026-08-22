@@ -10,7 +10,7 @@ from transformers import pipeline
 
 from scoring import score_attempt
 
-MODEL_ID = os.environ.get("WHISPER_MODEL_ID", "vasista22/whisper-hindi-large-v2")
+MODEL_ID = os.environ.get("WHISPER_MODEL_ID", "vasista22/whisper-hindi-small")
 SAMPLE_RATE = 16000
 
 app = FastAPI(title="Hindi Pronunciation Scoring Service")
