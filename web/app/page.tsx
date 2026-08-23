@@ -1,70 +1,58 @@
 import Link from "next/link";
+import { RecentProgress } from "@/components/RecentProgress";
+import { TodayStatus } from "@/components/TodayStatus";
 
 const EXERCISES = [
   {
     href: "/reading-aloud",
-    emoji: "🎙️",
-    title: "Reading Aloud",
-    subtitle: "Read a line out loud, get scored",
-    badgeClassName: "bg-brand-pink/15",
-    titleClassName: "text-brand-pink",
+    title: "पढ़कर सुनाओ",
+    subtitle: "Reading aloud",
+    blurb: "Read a passage out loud and see which words landed.",
   },
   {
     href: "/word-power",
-    emoji: "🧩",
     title: "शब्द शक्ति",
-    subtitle: "Match each word to its meaning",
-    badgeClassName: "bg-brand-blue/15",
-    titleClassName: "text-brand-blue",
+    subtitle: "Word power",
+    blurb: "Match each Hindi word to what it means.",
   },
 ];
 
 export default function Home() {
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-10 px-6 py-14">
-      <div className="flex flex-col items-start gap-3">
-        <span className="icon-badge float h-14 w-14 bg-brand-yellow/25 text-3xl">
-          👋
-        </span>
-        <h1 className="font-[family-name:var(--font-display)] text-4xl text-brand-pink">
-          नमस्ते!
-        </h1>
-        <p className="text-base text-foreground/60">
-          Pick an exercise to keep your streak going.
-        </p>
+    <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-7 sm:px-6 sm:py-10">
+      <h1 className="text-2xl font-semibold sm:text-3xl">नमस्ते!</h1>
+      <p className="mt-1.5 text-[0.9375rem] text-muted">
+        Two ways to practise today.
+      </p>
+
+      <div className="mt-5 space-y-3">
+        <TodayStatus />
+        <RecentProgress />
       </div>
 
-      <div className="grid gap-5 sm:grid-cols-2">
+      <ul className="mt-4 space-y-3">
         {EXERCISES.map((ex) => (
-          <Link
-            key={ex.href}
-            href={ex.href}
-            className="card group flex flex-col gap-4 p-6 transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
-          >
-            <span
-              className={`icon-badge h-14 w-14 text-3xl ${ex.badgeClassName}`}
+          <li key={ex.href}>
+            <Link
+              href={ex.href}
+              className="card flex items-center gap-4 p-4 transition-colors hover:border-muted active:bg-border/25 sm:p-5"
             >
-              {ex.emoji}
-            </span>
-            <div>
-              <p
-                className={`font-[family-name:var(--font-display)] text-xl ${ex.titleClassName}`}
-              >
-                {ex.title}
-              </p>
-              <p className="mt-1 text-sm text-foreground/60">{ex.subtitle}</p>
-            </div>
-            <span
-              className={`mt-auto inline-flex items-center gap-1 text-sm font-bold ${ex.titleClassName}`}
-            >
-              Start
-              <span className="transition-transform duration-200 group-hover:translate-x-1">
+              <div className="min-w-0 flex-1">
+                <p className="eyebrow">{ex.subtitle}</p>
+                <p className="mt-1 font-[family-name:var(--font-read)] text-xl leading-snug sm:text-2xl">
+                  {ex.title}
+                </p>
+                <p className="mt-1.5 text-sm leading-snug text-muted">
+                  {ex.blurb}
+                </p>
+              </div>
+              <span className="shrink-0 text-lg text-muted" aria-hidden>
                 →
               </span>
-            </span>
-          </Link>
+            </Link>
+          </li>
         ))}
-      </div>
+      </ul>
     </main>
   );
 }

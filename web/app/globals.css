@@ -1,218 +1,289 @@
 @import "tailwindcss";
 
-/* Kid-vibrant palette — brighter, more varied than the logo's raw tones,
-   built for high-contrast, playful UI rather than an adult brand page. */
+/* ===========================================================================
+   Quiet by default.
+   A child reads Devanagari off this screen, usually on a phone. Everything
+   here is tuned for that: high text contrast, one accent, no ambient colour
+   competing with the passage. Colour is reserved for meaning — how a word was
+   read — and never used for decoration.
+   ========================================================================= */
+
 :root {
-  --background: #fffbf0;
-  --foreground: #33254a;
+  --background: #fbfaf8;
   --surface: #ffffff;
-  --border: #ffe1b3;
+  --foreground: #1c1b1a;
+  --muted: #6e6b67;
+  --border: #e7e4df;
 
-  --brand-pink: #ff4d8d;
-  --brand-orange: #ff9f1c;
-  --brand-yellow: #ffd23f;
-  --brand-blue: #2ec4f1;
-  --brand-green: #3ecf6d;
+  /* One accent: ink. */
+  --accent: #1e5f74;
+  --accent-ink: #17495a;
 
-  --shade-mix: 22%;
+  /* Meaning, not decoration. Desaturated so a page of marks stays calm. */
+  --good: #3f7d5c;
+  --warn: #a9691e;
+
+  /* Inter has no Devanagari, so Noto Sans Devanagari takes every such glyph.
+     Together they read as one interface face. */
+  --font-ui: var(--font-inter), var(--font-noto-dev);
 }
 
 @theme inline {
   --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
   --color-border: var(--border);
-  --color-brand-pink: var(--brand-pink);
-  --color-brand-orange: var(--brand-orange);
-  --color-brand-yellow: var(--brand-yellow);
-  --color-brand-blue: var(--brand-blue);
-  --color-brand-green: var(--brand-green);
-  --font-sans: var(--font-hind);
-  --font-display: var(--font-modak);
+  --color-accent: var(--accent);
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+  --font-sans: var(--font-ui);
+  --font-read: var(--font-read);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #241b36;
-    --foreground: #fff3d6;
-    --surface: #322546;
-    --border: #4a3564;
-    --brand-pink: #ff6fa0;
-    --brand-orange: #ffb238;
-    --brand-yellow: #ffdb6d;
-    --brand-blue: #5ad1fa;
-    --brand-green: #57dd84;
+    --background: #16181a;
+    --surface: #1e2124;
+    --foreground: #eceae6;
+    --muted: #9c9892;
+    --border: #2f3336;
 
-    --shade-mix: 34%;
+    --accent: #74b3c6;
+    --accent-ink: #8cc4d5;
+
+    --good: #74b294;
+    --warn: #cfa268;
   }
 }
 
 body {
   min-height: 100dvh;
-  background-color: var(--background);
-  background-image:
-    radial-gradient(circle at 10% 6%, color-mix(in srgb, var(--brand-yellow) 45%, transparent) 0%, transparent 32%),
-    radial-gradient(circle at 92% 2%, color-mix(in srgb, var(--brand-blue) 35%, transparent) 0%, transparent 30%),
-    radial-gradient(circle at 96% 88%, color-mix(in srgb, var(--brand-pink) 28%, transparent) 0%, transparent 34%),
-    radial-gradient(circle at 2% 92%, color-mix(in srgb, var(--brand-green) 26%, transparent) 0%, transparent 30%),
-    radial-gradient(color-mix(in srgb, var(--foreground) 9%, transparent) 1px, transparent 1px);
-  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat;
-  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 22px 22px;
-  background-attachment: fixed;
+  background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-ui), "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  /* Never let a phone scroll sideways. */
+  overflow-x: hidden;
 }
 
 :focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--brand-blue) 65%, transparent);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 0.5rem;
-}
-
-@keyframes pop {
-  0% {
-    transform: scale(0.85);
-    opacity: 0;
-  }
-  60% {
-    transform: scale(1.04);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-5px) rotate(-3deg);
-  }
+  border-radius: 0.375rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes tick-in {
+  from {
+    opacity: 0;
+    transform: scaleY(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
   }
 }
 
 @layer components {
-  /* Depth card — replaces flat border+tint fills everywhere */
+  /* ---- Surfaces -------------------------------------------------------- */
+  /* A hairline, not a shadow. Depth comes from the border and the page gap. */
   .card {
     background: var(--surface);
-    border: 2px solid var(--border);
-    border-radius: 1.75rem;
-    box-shadow:
-      0 1px 2px rgba(0, 0, 0, 0.05),
-      0 14px 30px -16px rgba(0, 0, 0, 0.22);
+    border: 1px solid var(--border);
+    border-radius: 0.875rem;
   }
 
-  /* Circular badge used to hold an emoji/icon with a bit of sculpted depth */
-  .icon-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 9999px;
-    box-shadow: inset 0 -3px 0 0 rgba(0, 0, 0, 0.08);
-  }
-
-  /* Color modifiers — set the two custom props every button/icon-btn variant reads */
-  .clr-pink {
-    --btn-color: var(--brand-pink);
-    --btn-shade: color-mix(in srgb, var(--brand-pink) 100%, black var(--shade-mix));
-  }
-  .clr-orange {
-    --btn-color: var(--brand-orange);
-    --btn-shade: color-mix(in srgb, var(--brand-orange) 100%, black var(--shade-mix));
-  }
-  .clr-blue {
-    --btn-color: var(--brand-blue);
-    --btn-shade: color-mix(in srgb, var(--brand-blue) 100%, black var(--shade-mix));
-  }
-  .clr-green {
-    --btn-color: var(--brand-green);
-    --btn-shade: color-mix(in srgb, var(--brand-green) 100%, black var(--shade-mix));
-  }
-
-  /* Tactile "press down" button — solid fill, offset shadow doubles as a bottom edge */
+  /* ---- Controls -------------------------------------------------------- */
+  /* 44px minimum on every tap target — this is used with a thumb. */
   .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    font-weight: 700;
-    border-radius: 1rem;
+    min-height: 2.875rem;
+    padding: 0.6875rem 1.125rem;
+    border-radius: 0.625rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1.2;
     white-space: nowrap;
     user-select: none;
-    transition:
-      transform 0.12s ease,
-      box-shadow 0.12s ease,
-      filter 0.12s ease,
-      opacity 0.12s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease,
+      color 0.15s ease, opacity 0.15s ease;
   }
   .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  .btn:not(:disabled):hover {
-    filter: brightness(1.05);
-  }
-
-  .btn-solid {
-    background: var(--btn-color);
-    color: white;
-    padding: 0.875rem 1.75rem;
-    box-shadow: 0 4px 0 0 var(--btn-shade);
-  }
-  .btn-solid:not(:disabled):active {
-    transform: translateY(3px);
-    box-shadow: 0 1px 0 0 var(--btn-shade);
-  }
-
-  .btn-outline {
-    background: var(--surface);
-    border: 2px solid var(--btn-color);
-    color: var(--btn-color);
-    padding: 0.625rem 1.25rem;
-    box-shadow: 0 3px 0 0 var(--btn-shade);
-  }
-  .btn-outline:not(:disabled):active {
-    transform: translateY(2px);
-    box-shadow: 0 1px 0 0 var(--btn-shade);
-  }
-
-  /* Circular icon-only tactile button (speaker, close, etc.) */
-  .icon-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 9999px;
-    background: var(--surface);
-    border: 2px solid var(--btn-color);
-    color: var(--btn-color);
-    box-shadow: 0 3px 0 0 var(--btn-shade);
-    transition:
-      transform 0.12s ease,
-      box-shadow 0.12s ease,
-      filter 0.12s ease;
-  }
-  .icon-btn:not(:disabled):hover {
-    filter: brightness(1.05);
-  }
-  .icon-btn:not(:disabled):active {
-    transform: translateY(2px);
-    box-shadow: 0 1px 0 0 var(--btn-shade);
-  }
-  .icon-btn:disabled {
-    opacity: 0.5;
+    opacity: 0.45;
     cursor: not-allowed;
   }
 
-  .float {
-    animation: float 3.2s ease-in-out infinite;
+  .btn-primary {
+    background: var(--accent);
+    color: #ffffff;
+    border: 1px solid var(--accent);
+  }
+  .btn-primary:not(:disabled):hover {
+    background: var(--accent-ink);
+    border-color: var(--accent-ink);
+  }
+
+  .btn-quiet {
+    background: transparent;
+    color: var(--foreground);
+    border: 1px solid var(--border);
+  }
+  .btn-quiet:not(:disabled):hover {
+    border-color: var(--muted);
+  }
+
+  .btn-stop {
+    background: var(--surface);
+    color: var(--warn);
+    border: 1px solid var(--warn);
+  }
+
+  /* ---- Labels ---------------------------------------------------------- */
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* ---- The reading surface --------------------------------------------- */
+  /* The brightest, calmest thing on the page. No rules, no tint — just the
+     passage, set in a face cut for reading Devanagari. */
+  .reading-surface {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.875rem;
+    transition: border-color 0.3s ease;
+  }
+  .reading-surface[data-live="true"] {
+    border-color: var(--accent);
+  }
+
+  .reading-text {
+    font-family: var(--font-read), Georgia, serif;
+    /* Large enough to read comfortably on a phone held at arm's length. */
+    font-size: clamp(1.25rem, 0.95rem + 1.5vw, 1.5rem);
+    line-height: 2;
+    color: var(--foreground);
+  }
+
+  /* ---- Marked words ----------------------------------------------------- */
+  /* Weight and a single underline carry the meaning; colour only confirms it,
+     so the marks still read if colour is missed entirely. */
+  .w {
+    padding-bottom: 0.08em;
+    border-bottom: 2px solid transparent;
+  }
+  .w-correct {
+    border-bottom-color: color-mix(in srgb, var(--good) 45%, transparent);
+  }
+  .w-miss {
+    color: var(--warn);
+    border-bottom-color: var(--warn);
+    font-weight: 600;
+  }
+  .w-skip {
+    color: var(--muted);
+    opacity: 0.55;
+    text-decoration: line-through;
+  }
+
+  /* What the recogniser heard instead, set small and plain beneath the word. */
+  .heard {
+    display: block;
+    font-family: var(--font-ui), sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--warn);
+    text-align: center;
+    margin-top: 0.15em;
+    white-space: nowrap;
+  }
+
+  /* ---- Score ------------------------------------------------------------ */
+  /* Twenty marks in one accent, grouped by skill. The bands are named in the
+     legend, so three competing hues buy nothing. */
+  .shiro-score {
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+    height: 0.5rem;
+  }
+  .shiro-tick {
+    flex: 1 1 0;
+    border-radius: 1px;
+    background: var(--border);
+    animation: tick-in 0.25s ease both;
+  }
+  .shiro-tick[data-earned="true"] {
+    background: var(--accent);
+  }
+  .shiro-tick[data-group-end="true"] {
+    margin-right: 0.5rem;
+  }
+
+  /* Full marks close the gaps into one continuous line. */
+  .shiro-score {
+    transition: gap 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .shiro-tick {
+    transition: margin-right 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+      border-radius 0.4s ease;
+  }
+  .shiro-score[data-joined="true"] {
+    gap: 0;
+  }
+  .shiro-score[data-joined="true"] .shiro-tick {
+    margin-right: 0;
+    border-radius: 0;
+  }
+  .shiro-score[data-joined="true"] .shiro-tick:first-child {
+    border-radius: 999px 0 0 999px;
+  }
+  .shiro-score[data-joined="true"] .shiro-tick:last-child {
+    border-radius: 0 999px 999px 0;
+  }
+
+  /* ---- Recording -------------------------------------------------------- */
+  .recede {
+    opacity: 0.4;
+    transition: opacity 0.3s ease;
+  }
+
+  .level-bar {
+    width: 3px;
+    border-radius: 999px;
+    background: var(--accent);
+    transition: height 0.09s linear;
+  }
+
+  .fade-up {
+    animation: fade-up 0.3s ease both;
   }
 }
