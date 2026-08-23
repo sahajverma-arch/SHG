@@ -1,6 +1,23 @@
 fastapi
 uvicorn[standard]
 python-multipart
+pydub
+numpy
+
+# Default ASR backend: the CTranslate2 build of the same Whisper weights.
+# ~40x faster than transformers on CPU (see README).
+faster-whisper
+
+# Hindi speech for the "Hear it first" button. Browsers cannot be relied on
+# here — Windows ships no hi-IN voice at all.
+#
+# Note: gtts pins click<8.2 while huggingface-hub needs >=8.4.2. The pin only
+# covers gtts's CLI, which this service never runs, so the newer click is
+# installed and `pip check` reports that conflict harmlessly.
+gTTS
+
+# Needed to convert the weights (one-off, see README) and for the fallback
+# ASR_BACKEND=transformers. Both are large; skip them if you already have a
+# converted model and don't want the fallback.
 transformers
 torch
-pydub

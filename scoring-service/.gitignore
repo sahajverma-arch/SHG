@@ -2,3 +2,6 @@
 __pycache__/
 *.pyc
 .venv/
+
+# Converted ASR weights (~240 MB) - rebuild with the command in README.md
+models/
