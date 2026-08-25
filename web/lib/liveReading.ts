@@ -28,12 +28,30 @@ const FOLD: Record<string, string> = {
   ट: "त", ड: "द", ण: "न", ष: "स", श: "स", व: "ब",
 };
 
-const CHUNK_MS = 3000;
-// Transcription cost grows faster than slice length — a 3s slice runs at about
-// 0.95x realtime, a 5s one at 2.9x. So a slice is hard-capped: if the server
-// falls behind, the oldest audio is dropped rather than letting slices grow
-// into a spiral the tracker can never recover from. Progress may skip; it will
-// not stall the recording.
+// How long a reader waits to see a word light up is this interval plus one
+// round trip, and the interval dominates. It cannot simply be made small: each
+// flush sends only the audio since the last one, so a short interval means
+// short slices, and a slice that cuts a word in half transcribes neither
+// half.
+//
+// Replaying two known readings through the service, counting how many passage
+// words the tracker actually matched:
+//
+//   interval   words tracked   felt lag
+//     3.0s      100% / 96%       ~1.95s
+//     2.0s      100% / 96%       ~1.39s
+//     1.2s       60% / 44%       ~0.87s
+//
+// So 2s: a third off the lag for no accuracy. Below that the tracker starts
+// losing the reading, which looks far worse than a slight delay.
+const CHUNK_MS = 2000;
+// A slice is hard-capped so that falling behind drops the oldest audio instead
+// of letting slices grow into a spiral the tracker never recovers from.
+// Progress may skip; it will not stall the recording.
+//
+// 4s specifically: shorter slices carry less context and are likelier to end
+// mid-word, which is what makes Whisper re-decode. Measured over arbitrary cut
+// points, 3s slices had a worst case of 8.67s against 0.73s for 4s ones.
 const MAX_SLICE_SEC = 4;
 
 // How far ahead a spoken word may match: a short hop for ordinary progress, a

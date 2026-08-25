@@ -80,6 +80,68 @@ def _post(client, seconds=6.0, silent=False, **extra):
     return client.post("/score", data=data, files=files)
 
 
+# ---------------------------------------------------------------------------
+# /transcribe — the live progress tracker
+# ---------------------------------------------------------------------------
+
+def _stub_asr(monkeypatch, transcript=TRANSCRIPT):
+    """Replace the loaded ASR and record how each call was made."""
+    import main
+
+    calls = []
+
+    def run(wav, sr, quick=False):
+        calls.append({"samples": len(wav), "sample_rate": sr, "quick": quick})
+        return transcript
+
+    monkeypatch.setattr(main, "_asr", run)
+    return calls
+
+
+def test_transcribe_returns_text_for_a_slice(client, monkeypatch):
+    calls = _stub_asr(monkeypatch)
+    body = client.post(
+        "/transcribe", files={"audio": ("slice.wav", _wav_bytes(2.0), "audio/wav")}
+    ).json()
+    assert body["text"] == TRANSCRIPT
+    assert len(calls) == 1
+
+
+def test_a_live_slice_asks_for_the_low_latency_decode(client, monkeypatch):
+    """Whisper's temperature retries are what the reader sees as a stall.
+
+    A live slice is cut mid-word and trips them often, so /transcribe opts out.
+    Measured over arbitrary cut points, that took the worst case from 8.67s to
+    2.39s. If this argument ever stops being passed the tracker still works, so
+    nothing would fail except the responsiveness — hence the test.
+    """
+    calls = _stub_asr(monkeypatch)
+    client.post("/transcribe", files={"audio": ("slice.wav", _wav_bytes(2.0), "audio/wav")})
+    assert calls[0]["quick"] is True
+
+
+def test_scoring_a_whole_reading_keeps_the_accurate_decode(client, monkeypatch):
+    calls = _stub_asr(monkeypatch)
+    _post(client)
+    assert calls[0]["quick"] is False
+
+
+def test_transcribe_says_nothing_about_silence(client, monkeypatch):
+    """The tracker must not advance on a child who has not started yet."""
+    calls = _stub_asr(monkeypatch)
+    body = client.post(
+        "/transcribe", files={"audio": ("slice.wav", _wav_bytes(2.0, silent=True), "audio/wav")}
+    ).json()
+    assert body["text"] == ""
+    assert calls == [], "silence should never reach the model"
+
+
+def test_transcribe_tolerates_an_empty_upload(client, monkeypatch):
+    _stub_asr(monkeypatch)
+    body = client.post("/transcribe", files={"audio": ("slice.wav", b"", "audio/wav")}).json()
+    assert body["text"] == ""
+
+
 def test_health_reports_the_active_backend(client):
     body = client.get("/health").json()
     assert body["status"] == "ok"
