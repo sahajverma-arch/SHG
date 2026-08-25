@@ -1,7 +1,9 @@
 import io
 import json
 import os
+import sys
 import time
+import types
 import wave
 from collections import OrderedDict
 from pathlib import Path
@@ -12,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydub import AudioSegment
 
 from scoring import DEFAULT_LEVEL, score_attempt
+from tts_cache import find_prerendered
 
 SAMPLE_RATE = 16000
 
@@ -50,6 +53,17 @@ _asr = None
 
 def _load_faster_whisper():
     """CTranslate2 backend. Needs the converted model — see README."""
+    # faster-whisper imports PyAV at module load, only for its own
+    # `decode_audio`. Nothing here calls that — audio reaches the backend
+    # already decoded to a numpy array by `load_audio` — and PyAV's bundled
+    # binaries are refused outright by Windows Application Control on some
+    # machines. A stub module is enough to get past the import when the real
+    # one will not load.
+    try:
+        import av  # noqa: F401
+    except ImportError:
+        sys.modules.setdefault("av", types.ModuleType("av"))
+
     from faster_whisper import WhisperModel
 
     if not Path(CT2_MODEL_PATH).is_dir():
@@ -186,32 +200,66 @@ def health():
 # nothing at all. Synthesising server-side means every device gets the same
 # model reading, whatever voices happen to be installed.
 #
-# gTTS calls Google Translate's undocumented speech endpoint — free and no
-# account, matching the no-card constraint in blueprint 04, but it needs
-# network access and could change without notice. /tts degrades to 503 and the
-# web app falls back to the browser voice.
+# edge-tts drives Microsoft Edge's "Read aloud" service over the same
+# unofficial channel the browser feature itself uses — free and no account,
+# like gTTS, but a real neural voice instead of Google Translate's older,
+# more robotic one. It needs network access and could change without notice.
+# /tts degrades to 503 and the web app falls back to the browser voice.
+TTS_VOICE = os.environ.get("TTS_VOICE", "hi-IN-SwaraNeural")
+
+# How far to slow the model reading. This is a blunt time-stretch, not a
+# re-performance: past about -10% the prosody smears and the voice starts to
+# sound synthetic, which is the opposite of what a child should be copying.
+# -25% was audibly dragging.
+TTS_RATE_SLOW = os.environ.get("TTS_RATE_SLOW", "-10%")
+TTS_RATE_NORMAL = os.environ.get("TTS_RATE_NORMAL", "+0%")
+
+# Pre-rendered speech, checked before the network call.
+#
+# IndicF5 (AI4Bharat, MIT) is a much more natural Hindi voice than anything
+# edge-tts offers, but it is a 0.4B flow-matching model: about 30s per
+# sentence on a GTX 1650, and minutes on CPU. That is nowhere near a button
+# press. The passages are a fixed set, though, so they can be rendered once
+# ahead of time and served instantly from disk. See prerender_tts.py.
+#
+# Anything without a pre-rendered file falls through to edge-tts as before, so
+# a passage nobody has rendered yet still speaks.
 _TTS_CACHE: "OrderedDict[tuple[str, bool], bytes]" = OrderedDict()
 _TTS_CACHE_MAX = 32
 _TTS_MAX_CHARS = 800
 
 
 @app.get("/tts")
-def tts(text: str, slow: bool = True):
+async def tts(text: str, slow: bool = True):
     text = text.strip()
     if not text:
         raise HTTPException(400, "Nothing to say")
     if len(text) > _TTS_MAX_CHARS:
         raise HTTPException(400, f"Text longer than {_TTS_MAX_CHARS} characters")
 
+    pre = find_prerendered(text)
+    if pre is not None:
+        return Response(
+            content=pre.read_bytes(),
+            media_type="audio/wav",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
     key = (text, slow)
     cached = _TTS_CACHE.get(key)
     if cached is None:
         try:
-            from gtts import gTTS
+            from edge_tts import Communicate
 
-            buffer = io.BytesIO()
-            gTTS(text, lang="hi", slow=slow).write_to_fp(buffer)
-            cached = buffer.getvalue()
+            rate = TTS_RATE_SLOW if slow else TTS_RATE_NORMAL
+            communicate = Communicate(text, TTS_VOICE, rate=rate)
+            chunks = bytearray()
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    chunks.extend(chunk["data"])
+            if not chunks:
+                raise RuntimeError("no audio returned")
+            cached = bytes(chunks)
         except Exception as exc:
             # Name the cause: a silent 503 here is indistinguishable from the
             # service being down, and the usual causes (no network, upstream
