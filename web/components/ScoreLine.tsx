@@ -44,10 +44,22 @@ export function ScoreLine({
   let tickIndex = 0;
 
   return (
-    <div>
+    // The mark arrives seconds after the child stops reading, and it is the
+    // whole point of the interaction — so it announces itself rather than
+    // appearing silently for anyone not watching the screen.
+    <div role="status">
       <p className="flex items-baseline gap-1.5">
-        <span className="text-4xl font-semibold tabular-nums">{total}</span>
-        <span className="text-base text-muted">/ {MAX_TOTAL_SCORE}</span>
+        {/* Spoken as a sentence; the two spans beside it would otherwise be
+            read as the bare fragment "14 / 20". */}
+        <span className="sr-only">
+          Scored {total} out of {MAX_TOTAL_SCORE}
+        </span>
+        <span aria-hidden className="text-4xl font-semibold tabular-nums">
+          {total}
+        </span>
+        <span aria-hidden className="text-base text-muted">
+          / {MAX_TOTAL_SCORE}
+        </span>
       </p>
 
       <div className="shiro-score mt-4" data-joined={joined} aria-hidden>

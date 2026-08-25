@@ -35,6 +35,12 @@ export const viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover" as const,
+  // Paints the phone's browser chrome to match the page, so the app does not
+  // sit in a light bar in dark mode. Both values are the --background token.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fbfaf8" },
+    { media: "(prefers-color-scheme: dark)", color: "#16181a" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

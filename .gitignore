@@ -1,0 +1,10 @@
+# Agent tooling, not application source.
+#
+# `npx skills add` installs third-party skill packs here — design guidance for
+# whoever happens to be pairing with an AI, unrelated to what the app does and
+# unread by anything that runs. Kept out of the repo so a checkout stays about
+# the product. skills-lock.json is the manifest that reproduces the set, so
+# commit that instead if the team wants the same packs.
+.agents/
+.claude/
+skills-lock.json

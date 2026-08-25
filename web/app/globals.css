@@ -57,6 +57,19 @@
   }
 }
 
+/* Tells the browser which way the palette runs, which is the only way native
+   parts of the page — scrollbars, form controls, the spinner in a date field —
+   follow the theme. Without it a dark page keeps light scrollbars. */
+:root {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+  }
+}
+
 body {
   min-height: 100dvh;
   background: var(--background);
@@ -65,6 +78,20 @@ body {
   -webkit-font-smoothing: antialiased;
   /* Never let a phone scroll sideways. */
   overflow-x: hidden;
+}
+
+/* Mobile browsers hold a tap for ~300ms to see whether a second one is coming
+   and makes it a zoom. On a page with no pinch-zoom targets that delay is pure
+   lag on every button a child presses. The default grey flash that replaces it
+   is Android's, and does not match the palette — the button's own :active state
+   is the feedback. */
+button,
+a,
+label,
+summary,
+[role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 :focus-visible {
