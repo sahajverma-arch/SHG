@@ -11,7 +11,7 @@ supabase/          schema.sql — run once a Supabase project exists
 
 ## Run it locally
 
-**1. Scoring service** (start this first — model download happens on first request)
+**1. Scoring service** (start this first)
 
 ```
 cd scoring-service
@@ -19,6 +19,19 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 copy .env.example .env
+```
+
+Then **convert the weights** — this is not optional. The default backend is the
+CTranslate2 build, the converted model is gitignored because it is ~240 MB, and
+without it every request answers 503 telling you so. The one-off command is in
+[scoring-service/README.md](scoring-service/README.md#convert-the-model-one-off);
+it takes a few minutes.
+
+If the machine has an NVIDIA GPU, also `pip install -r requirements-gpu.txt`.
+`ASR_DEVICE` defaults to `auto`, so the GPU is picked up when it is usable and
+CPU is used when it is not — measured 1.6s against 4.2s for 12s of audio.
+
+```
 uvicorn main:app --reload --port 8000
 ```
 
@@ -31,13 +44,30 @@ terminal so the updated PATH is picked up. (`brew install ffmpeg` on macOS,
 
 ```
 cd web
+npm install
 copy .env.local.example .env.local
 npm run dev
 ```
 
+`.env.local` needs a real Supabase URL and publishable key — see the Supabase
+section below. Without them the passage list is empty and the app quietly
+serves its one built-in fallback passage.
+
 Open http://localhost:3000/reading-aloud, allow mic access, record a line,
-stop — the transcript and accuracy/fluency/pace scores come back from the
-scoring service.
+stop — the transcript and a 20-point breakdown (pronunciation 8, fluency 6,
+pace 6) come back from the scoring service.
+
+**3. The model reading — optional**
+
+"Listen" works immediately through edge-tts, over the network, no account. The
+markedly better IndicF5 voice is pre-rendered per passage and those clips are
+gitignored, so a fresh clone has none and every passage falls back. Rendering
+them needs a GPU, gated Hugging Face access and a second virtualenv — all of it
+in [scoring-service/README.md](scoring-service/README.md#pre-rendering-with-indicf5).
+
+Which voice you are actually hearing is checkable rather than guessable:
+`/health` reports `tts_prerendered_clips`, and `/tts` answers with an
+`X-TTS-Source` header.
 
 ## Supabase — for the streak to survive a cleared cache
 
