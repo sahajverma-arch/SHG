@@ -12,3 +12,12 @@ phonemizer
 
 # The phone recogniser itself rides on transformers + torch, already in
 # requirements.txt for the fallback ASR backend.
+
+# The evaluations synthesise their own mispronunciations — a passage read
+# once correctly and once with a planted error — and compare the two.
+#
+# Deliberately gTTS and not the edge-tts the service now speaks with. Every
+# measurement in docs/phoneme-scoring.md was taken against gTTS audio, so
+# changing the voice would silently invalidate the comparisons rather than
+# improve them. This is a measurement instrument, not a feature.
+gTTS

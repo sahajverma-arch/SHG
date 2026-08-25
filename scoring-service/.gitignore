@@ -5,3 +5,7 @@ __pycache__/
 
 # Converted ASR weights (~240 MB) - rebuild with the command in README.md
 models/
+tts-cache/
+
+# Reference voice prompt for IndicF5 - prerender_tts.py fetches it on demand
+tts-prompts/
