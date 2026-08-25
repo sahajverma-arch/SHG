@@ -30,7 +30,8 @@ Phoneme scoring was meant to close it.
 | `pronunciation.py` | espeak Hindi G2P (expected sounds) + wav2vec2 phone recognition (heard sounds) |
 | `gop.py` | CTC forced alignment, Goodness of Pronunciation, whole-utterance `alignment_score`, and pooled-slot scoring |
 | `eval_gop.py` | the one-sided evaluation harness — run it to reproduce |
-| `eval_contrastive.py` | the two-way evaluation (Approach 3), including the aspiration diagnostic |
+| `eval_contrastive.py` | the two-way evaluation (Approach 3) |
+| `diag_aspiration.py` | the aspiration diagnostic — run this before trusting any new phone model with Hindi |
 | `test_pronunciation.py` | 39 tests over the parts that are correct |
 
 espeak-ng comes from the `espeakng-loader` package rather than a system
@@ -282,6 +283,7 @@ judgement.
 pip install -r requirements-phonemes.txt
 python eval_gop.py <scratch-dir-with-fleurs-samples>          # one-sided
 python eval_contrastive.py <scratch-dir-with-fleurs-samples>  # two-way
+python diag_aspiration.py <scratch-dir-with-fleurs-samples>   # is the model deaf to aspiration?
 python -m pytest test_pronunciation.py
 ```
 
