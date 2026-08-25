@@ -38,8 +38,8 @@ export const viewport = {
   // Paints the phone's browser chrome to match the page, so the app does not
   // sit in a light bar in dark mode. Both values are the --background token.
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fbfaf8" },
-    { media: "(prefers-color-scheme: dark)", color: "#16181a" },
+    { media: "(prefers-color-scheme: light)", color: "#f6f1e9" },
+    { media: "(prefers-color-scheme: dark)", color: "#1b1815" },
   ],
 };
 
