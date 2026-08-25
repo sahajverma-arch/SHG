@@ -293,11 +293,16 @@ export default function ReadingAloudPage() {
         </p>
       )}
 
-      {error && (
-        <p className="mt-4 rounded-lg border border-warn/40 px-3 py-2 text-sm text-warn">
-          {error}
-        </p>
-      )}
+      {/* `assertive`, unusually: an error here means the recording did not
+          happen, and a child waiting to be told they were heard should not
+          have to discover that by silence. */}
+      <div aria-live="assertive" role="alert">
+        {error && (
+          <p className="mt-4 rounded-lg border border-warn/40 px-3 py-2 text-sm text-warn">
+            {error}
+          </p>
+        )}
+      </div>
 
       {result && (
         <div className="fade-up mt-5 space-y-4">
@@ -347,7 +352,19 @@ export default function ReadingAloudPage() {
           <div className="mx-auto max-w-2xl">
             {recording ? (
               <>
-                <div className="mb-2 h-1 overflow-hidden rounded-full bg-border">
+                {/* A progressbar rather than a live region: this updates every
+                    couple of seconds while the child reads, and announcing each
+                    change would talk over them. A screen reader can report it
+                    on request instead. */}
+                <div
+                  className="mb-2 h-1 overflow-hidden rounded-full bg-border"
+                  role="progressbar"
+                  aria-label="Reading progress"
+                  aria-valuemin={0}
+                  aria-valuemax={passageWords.length}
+                  aria-valuenow={readWords}
+                  aria-valuetext={`${readWords} of ${passageWords.length} words read`}
+                >
                   <div
                     className="h-full rounded-full bg-accent transition-[width] duration-300"
                     style={{ width: `${progress}%` }}

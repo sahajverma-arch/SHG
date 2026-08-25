@@ -164,22 +164,48 @@ C:\if5-venv\Scripts\pip install torchaudio "transformers<4.50" safetensors
 C:\if5-venv\Scripts\pip install soundfile librosa vocos x_transformers torchdiffeq
 C:\if5-venv\Scripts\pip install ema_pytorch cached_path jieba pypinyin accelerate
 C:\if5-venv\Scripts\pip install hydra-core tomli pydub click tqdm huggingface_hub
-C:\if5-venv\Scripts\pip install audioop-lts matplotlib wandb datasets
+C:\if5-venv\Scripts\pip install matplotlib wandb datasets
+# Python 3.13+ only — see below
+C:\if5-venv\Scripts\pip install audioop-lts
 C:\if5-venv\Scripts\pip install --no-deps git+https://github.com/AI4Bharat/IndicF5.git
 ```
 
-Then, from this directory:
+Then, from this directory — build the list from the database, and render it:
 
 ```
+.venv\Scripts\python dump_passages.py                        # -> passages.txt
 C:\if5-venv\Scripts\python prerender_tts.py --file passages.txt
 ```
+
+`dump_passages.py` reads the `passages` table rather than `supabase/seed.sql`,
+because the seed is what was inserted once and the table is what a child is
+shown. It also handles the two ways that read looks like an empty table:
+`passages_read` requires an authenticated role, so the publishable key alone is
+filtered by RLS to `[]` with no error, and the table has no `title` column, so
+selecting one is a 400.
 
 One passage per line, UTF-8. Already-rendered passages are skipped, so adding a
 line and re-running only renders the new one. Clips land in `tts-cache/`, named
 by a hash of the whitespace-normalised text — `tts_cache.py` owns that naming
 and is imported by both sides so they cannot drift apart.
 
-### Four things that will bite you
+`passages.txt` is generated and gitignored. Re-run `dump_passages.py` after
+editing a passage: the clip is keyed by the text, so an edit orphans its audio
+and the passage quietly falls back to edge-tts. `/health` reports
+`tts_prerendered_clips`, and `/tts` answers with an `X-TTS-Source` header, so
+which voice actually spoke is checkable rather than guessed at.
+
+### Five things that will bite you
+
+**`audioop-lts` only exists for Python 3.13+, and it takes the whole install
+down with it.** It backports `audioop`, which was *removed* in 3.13; on 3.12
+that module is still in the standard library and the package is unnecessary.
+On 3.12 pip refuses it with `No matching distribution found`, and because pip
+resolves a command's packages as one set, every other package named alongside
+it is skipped too — so a single line that looks like it failed over one
+optional dependency actually leaves you with no numpy, no transformers and no
+torchaudio. The CUDA check still passes, which makes it easy to miss. Install
+it on its own line, or not at all.
 
 **`pip install torch` gives you the CPU build on Windows.** You have to point
 at the CUDA index explicitly. Check with `torch.cuda.is_available()`; on CPU

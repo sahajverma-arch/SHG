@@ -9,19 +9,28 @@
    ========================================================================= */
 
 :root {
-  --background: #fbfaf8;
-  --surface: #ffffff;
-  --foreground: #1c1b1a;
-  --muted: #6e6b67;
-  --border: #e7e4df;
+  /* Paper, not screen. The page is a warm off-white and the passage sits on
+     something a shade warmer still, so the reading surface reads as a sheet
+     laid on a desk rather than as a lit panel. */
+  --background: #f6f1e9;
+  --surface: #fffdf9;
+  --foreground: #22201d;
+  --muted: #6d675e;
+  --border: #e3dbcd;
 
-  /* One accent: ink. */
-  --accent: #1e5f74;
-  --accent-ink: #17495a;
+  /* One accent, warmed from teal towards ink-on-paper: still calm enough to
+     sit under a page of Devanagari, no longer clinical. */
+  --accent: #1d6473;
+  --accent-ink: #14505d;
+  /* What can be read *on* the accent. Hardcoding white worked here and failed
+     in dark mode, where the accent is a pale blue: white on it measured
+     2.20:1, against the 4.5 that ordinary text needs. The primary button — the
+     one a child presses every time — had near-invisible text. */
+  --on-accent: #ffffff;
 
   /* Meaning, not decoration. Desaturated so a page of marks stays calm. */
-  --good: #3f7d5c;
-  --warn: #a9691e;
+  --good: #3d7a55;
+  --warn: #a35f22;
 
   /* Inter has no Devanagari, so Noto Sans Devanagari takes every such glyph.
      Together they read as one interface face. */
@@ -43,17 +52,34 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #16181a;
-    --surface: #1e2124;
-    --foreground: #eceae6;
-    --muted: #9c9892;
-    --border: #2f3336;
+    /* Warm ink rather than neutral charcoal — the same paper idea after dark,
+       so the two themes feel like one product rather than two. */
+    --background: #1b1815;
+    --surface: #241f1b;
+    --foreground: #f0eae0;
+    --muted: #a49a8c;
+    --border: #38312a;
 
-    --accent: #74b3c6;
-    --accent-ink: #8cc4d5;
+    --accent: #7cb8c6;
+    --accent-ink: #95c9d5;
+    /* Dark ink on the pale accent, not white. */
+    --on-accent: #14201f;
 
-    --good: #74b294;
-    --warn: #cfa268;
+    --good: #7cb598;
+    --warn: #d6a870;
+  }
+}
+
+/* Tells the browser which way the palette runs, which is the only way native
+   parts of the page — scrollbars, form controls, the spinner in a date field —
+   follow the theme. Without it a dark page keeps light scrollbars. */
+:root {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
   }
 }
 
@@ -65,6 +91,20 @@ body {
   -webkit-font-smoothing: antialiased;
   /* Never let a phone scroll sideways. */
   overflow-x: hidden;
+}
+
+/* Mobile browsers hold a tap for ~300ms to see whether a second one is coming
+   and makes it a zoom. On a page with no pinch-zoom targets that delay is pure
+   lag on every button a child presses. The default grey flash that replaces it
+   is Android's, and does not match the palette — the button's own :active state
+   is the feedback. */
+button,
+a,
+label,
+summary,
+[role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 :focus-visible {
@@ -97,7 +137,7 @@ body {
 @keyframes tick-in {
   from {
     opacity: 0;
-    transform: scaleY(0.3);
+    transform: scaleY(0.25);
   }
   to {
     opacity: 1;
@@ -111,7 +151,7 @@ body {
   .card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 0.875rem;
+    border-radius: 1.25rem;
   }
 
   /* ---- Controls -------------------------------------------------------- */
@@ -121,16 +161,23 @@ body {
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    min-height: 2.875rem;
-    padding: 0.6875rem 1.125rem;
-    border-radius: 0.625rem;
+    min-height: 3rem;
+    padding: 0.75rem 1.25rem;
+    /* Fully rounded. On a page of rounded sheets a squarer button is the one
+       thing that still looks like a form control. */
+    border-radius: 999px;
     font-size: 0.9375rem;
     font-weight: 600;
     line-height: 1.2;
     white-space: nowrap;
     user-select: none;
     transition: background-color 0.15s ease, border-color 0.15s ease,
-      color 0.15s ease, opacity 0.15s ease;
+      color 0.15s ease, opacity 0.15s ease, transform 0.12s ease;
+  }
+  /* Presses in slightly. The only motion on the page that answers a touch
+     directly, which is what makes a button feel like a button. */
+  .btn:not(:disabled):active {
+    transform: scale(0.975);
   }
   .btn:disabled {
     opacity: 0.45;
@@ -139,7 +186,7 @@ body {
 
   .btn-primary {
     background: var(--accent);
-    color: #ffffff;
+    color: var(--on-accent);
     border: 1px solid var(--accent);
   }
   .btn-primary:not(:disabled):hover {
@@ -171,17 +218,42 @@ body {
     color: var(--muted);
   }
 
+  /* ---- Headings --------------------------------------------------------- */
+  /* Page titles are Devanagari, so the reading face carries them — the same
+     letterforms the child is about to read, rather than a UI sans. Tightened
+     and balanced, which matters more in Devanagari than in Latin: the
+     शिरोरेखा makes a lonely last word on its own line very visible. */
+  h1 {
+    font-family: var(--font-read), Georgia, serif;
+    letter-spacing: -0.005em;
+    line-height: 1.25;
+    text-wrap: balance;
+  }
+
   /* ---- The reading surface --------------------------------------------- */
   /* The brightest, calmest thing on the page. No rules, no tint — just the
      passage, set in a face cut for reading Devanagari. */
   .reading-surface {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 0.875rem;
-    transition: border-color 0.3s ease;
+    border-radius: 1.25rem;
+    /* One soft, warm-tinted shadow — the sheet lifts off the page rather than
+       being drawn onto it. Kept under 0.05 opacity so it reads as light, not
+       as a box. */
+    box-shadow: 0 1px 2px rgba(60, 44, 24, 0.03), 0 8px 24px rgba(60, 44, 24, 0.04);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
   }
   .reading-surface[data-live="true"] {
     border-color: var(--accent);
+    box-shadow: 0 1px 2px rgba(60, 44, 24, 0.03),
+      0 8px 28px color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+  /* On a dark ground a light shadow is invisible and a black one muddies the
+     warm tone, so depth comes from the border alone. */
+  @media (prefers-color-scheme: dark) {
+    .reading-surface {
+      box-shadow: none;
+    }
   }
 
   .reading-text {
@@ -232,14 +304,16 @@ body {
   .shiro-score {
     display: flex;
     align-items: stretch;
-    gap: 2px;
-    height: 0.5rem;
+    gap: 3px;
+    height: 0.75rem;
   }
   .shiro-tick {
     flex: 1 1 0;
-    border-radius: 1px;
+    border-radius: 999px;
     background: var(--border);
-    animation: tick-in 0.25s ease both;
+    /* Each mark lands with a small overshoot rather than fading in. Twenty of
+       them in sequence is the closest this page comes to applause. */
+    animation: tick-in 0.34s cubic-bezier(0.22, 1.4, 0.36, 1) both;
   }
   .shiro-tick[data-earned="true"] {
     background: var(--accent);

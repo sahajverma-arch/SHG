@@ -9,3 +9,8 @@ tts-cache/
 
 # Reference voice prompt for IndicF5 - prerender_tts.py fetches it on demand
 tts-prompts/
+
+# Regenerated from the database by dump_passages.py. Committing it would create
+# a second copy of the passage text that can drift from the table without
+# anything noticing - and a drifted line renders a clip nothing ever serves.
+passages.txt
