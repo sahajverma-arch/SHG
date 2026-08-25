@@ -133,3 +133,65 @@ def describe(expected: str, heard: str | None) -> str:
     if heard is None:
         return f"missed {expected}"
     return f"{expected} said as {heard}"
+
+
+# How the wav2vec2 recogniser actually spells Hindi, which is not how espeak
+# writes it. This matters far more than it looks: the model has `kʰ`, `bʰ`,
+# `pʰ` and the rest in its vocabulary and never once emits them. Across 545
+# non-blank frames of Hindi - real human speech included - it produced an
+# aspirated stop zero times. It writes those sounds as an ASCII digraph where
+# it has one (`kh`, `th`, `ph`), otherwise as the plain stop followed by a
+# separate `h`, and फ usually as the fricative `f`.
+#
+# Aligning espeak's `kʰ` against this model therefore scored a symbol the model
+# never produces, which turned every aspirated phone in every passage into an
+# automatic error. Since aspiration is exactly the contrast Hindi reading
+# practice cares about (क/ख, त/थ, प/फ, ब/भ, ड/ढ), that one mismatch was
+# poisoning the whole measurement.
+#
+# A phone maps to a tuple of *slots*, each slot a tuple of interchangeable
+# symbols to be pooled. Two slots means the model spells the sound with two
+# tokens - and that second slot is what a plain rival has to explain as
+# silence, which is what makes a dropped aspiration detectable at all.
+_MODEL_SPELLING: dict[str, tuple[tuple[str, ...], ...]] = {
+    # Aspirated stops. Digraphs exist only for k, t and p.
+    "kʰ": (("kʰ", "kh"),),
+    "tʰ": (("tʰ", "th"),),
+    "ʈʰ": (("ʈʰ", "th", "tʰ"),),
+    "pʰ": (("pʰ", "ph", "f"),),
+    "cʰ": (("cʰ", "tʃʰ", "tɕh"),),
+    "bʰ": (("bʰ", "b"), ("h",)),
+    "dʰ": (("dʰ", "dʰː", "d", "t̪"), ("h",)),
+    "ɖʰ": (("ɖʰ", "ɖ"), ("h",)),
+    "ɡʰ": (("ɡʰ", "ɡ"), ("h",)),
+    "ɟʰ": (("ɟʰ", "dʒ", "ɟ"), ("h",)),
+    # Plain consonants the model spells with another language's symbol.
+    "c": (("tʃ", "tɕ", "c", "ts"),),
+    "ɟ": (("dʒ", "dʑ", "ɟ", "dZ"),),
+    "t": (("t̪", "t"),),
+    "d": (("d", "d["),),
+    "ɾ": (("ɾ", "r", "ɹ"),),
+    "ʋ": (("ʋ", "v", "w"),),
+    "ɳ": (("ɳ", "n"),),
+    "ʃ": (("ʃ", "ɕ", "ʂ"),),
+    "s": (("s", "s̪"),),
+}
+
+
+def model_slots(phone: str, vocab) -> list[tuple[str, ...]]:
+    """The symbols this recogniser would emit for one expected phone.
+
+    Returns a list of slots, each a tuple of interchangeable vocabulary
+    symbols. Empty when the model has no way to spell the phone at all.
+    """
+    slots = []
+    for slot in _MODEL_SPELLING.get(phone, ((phone,),)):
+        usable = tuple(s for s in slot if s in vocab)
+        if usable:
+            slots.append(usable)
+    return slots
+
+
+def word_slots(phones, vocab) -> list[tuple[str, ...]]:
+    """`model_slots` over a whole word's expected phone sequence."""
+    return [slot for phone in phones for slot in model_slots(phone, vocab)]

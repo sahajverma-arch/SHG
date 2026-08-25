@@ -21,6 +21,7 @@ import torch
 from pydub import AudioSegment
 
 import gop
+import phones
 import pronunciation
 
 SCRATCH = sys.argv[1] if len(sys.argv) > 1 else "."
@@ -57,22 +58,29 @@ def build():
 
 
 def word_gops(processor, model, vocab, blank, words, wav):
-    """Mean GOP per word, or None where the word is too short to judge."""
+    """Mean GOP per word, or None where the word is too short to judge.
+
+    Targets go through `phones.word_slots`, which spells each expected sound
+    the way this recogniser actually writes it. Scoring espeak's `kʰ` directly
+    against a model that only ever emits `kh` or `k`+`h` made every aspirated
+    phone an automatic error, and aspiration is most of what Hindi reading
+    practice is checking.
+    """
     inputs = processor(wav, sampling_rate=16000, return_tensors="pt")
     with torch.no_grad():
         logits = model(inputs.input_values).logits[0]
     log_probs = torch.log_softmax(logits, dim=-1).numpy().astype(np.float64)
 
     per_word = [
-        [vocab[p] for p in pronunciation.expected_phones(w) if p in vocab] for w in words
+        phones.word_slots(pronunciation.expected_phones(w), vocab) for w in words
     ]
-    flat = [t for phones in per_word for t in phones]
-    scores = gop.gop_per_phone(log_probs, flat, blank)
+    flat = [[vocab[s] for s in slot] for slots in per_word for slot in slots]
+    scores = gop.gop_per_slot(log_probs, flat, blank)
 
     grouped, cursor = [], 0
-    for phones in per_word:
-        grouped.append(scores[cursor : cursor + len(phones)])
-        cursor += len(phones)
+    for slots in per_word:
+        grouped.append(scores[cursor : cursor + len(slots)])
+        cursor += len(slots)
     return grouped
 
 

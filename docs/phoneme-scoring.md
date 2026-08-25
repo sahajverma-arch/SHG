@@ -5,7 +5,11 @@ tested; the available models are not accurate enough to judge a child's
 pronunciation word by word. This document records what was tried and what the
 numbers were, so the work is not repeated blindly.
 
-**Picking this up?** Start at [Where to take this next](#where-to-take-this-next) — the most promising idea there was never tested, and the section ends with the dead ends worth skipping.
+**Picking this up?** Read [Approach 3](#approach-3--the-two-way-question) first —
+it found a bug that invalidated part of the earlier measurements, and it is the
+only approach with a clear path forward. Then
+[Where to take this next](#where-to-take-this-next), which ends with the dead
+ends worth skipping.
 
 ## Why it was attempted
 
@@ -22,11 +26,12 @@ Phoneme scoring was meant to close it.
 
 | file | role |
 |---|---|
-| `phones.py` | phone comparison cost, tuned so Hindi's aspiration and dental/retroflex contrasts cost full price while notation differences cost nothing |
+| `phones.py` | phone comparison cost, tuned so Hindi's aspiration and dental/retroflex contrasts cost full price while notation differences cost nothing; plus `model_slots`, how this recogniser actually spells Hindi |
 | `pronunciation.py` | espeak Hindi G2P (expected sounds) + wav2vec2 phone recognition (heard sounds) |
-| `gop.py` | CTC forced alignment and Goodness of Pronunciation |
-| `eval_gop.py` | the evaluation harness below — run it to reproduce |
-| `test_pronunciation.py` | 27 tests over the parts that are correct |
+| `gop.py` | CTC forced alignment, Goodness of Pronunciation, whole-utterance `alignment_score`, and pooled-slot scoring |
+| `eval_gop.py` | the one-sided evaluation harness — run it to reproduce |
+| `eval_contrastive.py` | the two-way evaluation (Approach 3), including the aspiration diagnostic |
+| `test_pronunciation.py` | 39 tests over the parts that are correct |
 
 espeak-ng comes from the `espeakng-loader` package rather than a system
 install, because installing it system-wide needs administrator rights.
@@ -76,6 +81,66 @@ one recording against a *completely different* transcript separates cleanly
 (**−1.97 vs −5.93, a gap of +3.97**). GOP works. It simply lacks the resolution
 to judge one word against ordinary speaker variation.
 
+### Approach 3 — the two-way question
+
+*Added after the first version of this document, which listed this as the most
+promising untried idea. It has now been tried: `eval_contrastive.py`.*
+
+Instead of *was this word correct?*, ask *does this audio fit `खाना` or `काना`
+better?* Both sides run through the same speaker, microphone and model, so the
+offset that ruined the absolute score should cancel.
+
+Building it turned up a real bug in everything above.
+
+**The recogniser never emits espeak's aspirated symbols.** `kʰ`, `bʰ`, `pʰ` and
+the rest are all in its 392-symbol vocabulary. Across **545 non-blank frames of
+Hindi — real human speech included — it produced an aspirated stop exactly zero
+times.** It writes those sounds as an ASCII digraph where it has one (`kh`,
+`th`, `ph`), otherwise as the plain stop followed by a separate `h`, and फ
+usually as `f`. It decodes भाई as `b h aɪ i` and फल as `f a l`.
+
+So every aspirated phone in every passage was being scored against a symbol the
+model does not use — an automatic error on precisely the contrast Hindi reading
+practice exists to teach. When the audio genuinely contained an aspirated stop,
+the plain counterpart scored better **29 times out of 29** (GOP −8.89 vs −2.30).
+
+`phones.model_slots` fixes this, mapping each expected sound onto the symbols
+this model actually produces. The result is worth stating plainly:
+
+| | caught | false positives |
+|---|---|---|
+| One-sided GOP, before the notation fix | 2 of 5 | 15% (1.2 per reading) |
+| One-sided GOP, after the notation fix | 2 of 5 | **17% (1.1 per reading)** |
+
+**The fix changed nothing.** That is the useful finding: the problem was never
+the notation, it is the question. Asking "are the expected sounds present?"
+cannot separate खाना from काना, because the plain reading is never *ruled out*
+by a missing target — it only has to absorb the leftover frames, and a per-phone
+mean waters that evidence down across the rest of the word.
+
+Asking which of two specific words fits better, scored over the whole utterance
+(`gop.alignment_score`), does separate them:
+
+- On 20 minimal pairs, the correct reading scores higher than the wrong one
+  **20 times out of 20**, median gap **+7.87**. The information is unambiguously
+  there.
+- Uncalibrated, though, the sign is right only **65%** of the time on correct
+  readings and 80% on wrong ones — each contrast sits at its own offset.
+- Calibrating per contrast class, leaving each item out: **17 of 17 errors
+  caught, but 47% of correct readings falsely accused.**
+- Worse, thresholds calibrated on synthesised speech do not transfer to real
+  speech at all. On FLEURS the same thresholds flag 14 of 16 correctly-read
+  words in one class, 3 of 3 in another.
+- Normalising within a reading instead (the trick `flag_words` uses, which
+  cancels a speaker's own offset) trades it back the other way: **1 of 5 caught
+  at 7% false positives** — cleaner than the incumbent, but catching less.
+
+So the two-way question is genuinely better than the open one, and it is still
+not deployable. The discriminative signal is real and strong; it sits on top of
+a per-speaker, per-word offset of the same size, and there is no labelled data
+to learn that offset from. Which is the same wall as before, now located
+precisely.
+
 ## Why it is not shipped
 
 A detector that catches 40% of errors while telling a child they mispronounced
@@ -91,29 +156,37 @@ limits, and says plainly what those limits are.
 Ordered by payoff per unit of work. The first two are cheap enough to try in
 an afternoon on top of what is already in this directory.
 
-### 1. Ask a two-way question instead of an open one (cheapest, untried)
+### 1. Finish the two-way question — it has signal, it needs an offset
 
-This is the most promising idea and it was not tested. Everything above asks
-an open question — *was this word pronounced correctly?* — and answering it
-needs an absolute notion of correct that the models do not have.
+Approach 3 above is now built and measured. Start here, because the hard part
+is done and the remaining part is well defined.
 
-The errors children actually make are not open. They are a small, known set of
-confusions: aspiration dropped (`खाना` → `काना`), aspiration added, retroflex
-for dental (`थके` → `ठके`), voicing swapped. So ask the two-way question:
+What is established: on the same audio, the correct word beats a specific wrong
+word 20 times out of 20 with a median gap of +7.87. What blocks it: each
+contrast and each speaker sits at its own offset, and no threshold transfers
+between them.
 
-```
-gop(खाना's phones) vs gop(काना's phones)   on the same audio
-```
+Three concrete things to try, in order:
 
-Both sides run through the same speaker, the same microphone, the same room
-and the same model bias, so the offset that ruined the absolute score cancels
-almost entirely. It also turns a hard problem (open scoring) into an easy one
-(pick the likelier of two known candidates).
+- **A better rival than one rule-generated guess.** `eval_contrastive.rival_for`
+  invents a single rival per word by the first applicable swap. Score *several*
+  rivals per word and take the best-fitting one — that is both closer to what a
+  child actually does and a stronger signal, since the margin to the *nearest*
+  wrong word is what matters.
+- **Estimate the speaker's offset from the reading itself.** Per-reading
+  normalisation already gets false positives down to 7%. It currently needs at
+  least four words in a contrast class before it will judge any of them, which
+  is why most words in a short passage are skipped entirely. Pooling classes
+  with a per-class shift, rather than normalising each separately, should judge
+  far more words from the same evidence.
+- **Only then, a threshold.** Which needs (3).
 
-Everything needed is already here: `gop.gop_per_phone` takes any target
-sequence, and `phones.py` knows which contrasts matter. The work is generating
-the confusion candidate for each word and comparing. Worth measuring against
-the same `eval_gop.py` set before anything else is attempted.
+### 1b. Do not re-derive the notation bug
+
+`phones.model_slots` exists because this recogniser does not spell Hindi the way
+espeak does. Anything new that maps expected phones to model vocabulary ids must
+go through it, or it will silently reproduce the "zero aspirated frames in 545"
+failure and every measurement on top will be wrong in the same invisible way.
 
 ### 2. Score words, not readings — and only a few of them
 
@@ -161,6 +234,12 @@ The phone recogniser is zero-shot on Hindi and mis-realises Hindi phones in a
 *consistent* way — it drops aspiration on correct audio. That is a calibration
 error, not a capability limit, and calibration errors are learnable.
 
+Approach 3 measured how consistent: **zero aspirated stops in 545 non-blank
+frames**, and the plain counterpart winning 29 times out of 29 on audio that
+genuinely contained the aspirated sound. `phones.model_slots` works around the
+notation, but the model's probability mass is still in the wrong place, and
+that is what caps every method built on it.
+
 Adapting `facebook/wav2vec2-lv-60-espeak-cv-ft` on Hindi speech with espeak
 labels as targets (IndicTTS, Shrutilipi, FLEURS) should remove most of the
 33–44% false positives without needing any mispronunciation labels at all —
@@ -201,6 +280,15 @@ judgement.
 
 ```
 pip install -r requirements-phonemes.txt
-python eval_gop.py <scratch-dir-with-fleurs-samples>
+python eval_gop.py <scratch-dir-with-fleurs-samples>          # one-sided
+python eval_contrastive.py <scratch-dir-with-fleurs-samples>  # two-way
 python -m pytest test_pronunciation.py
 ```
+
+The scratch directory needs `hindi/meta.json` and `hindi/sample0.wav`,
+`hindi/sample1.wav` — two FLEURS Hindi clips and their transcripts. Both
+evaluations synthesise their own error cases with gTTS and cache them, so the
+first run needs a network connection and later runs do not.
+
+Set `PYTHONIOENCODING=utf-8` on Windows, or the Devanagari in the reports will
+crash the console rather than the script.

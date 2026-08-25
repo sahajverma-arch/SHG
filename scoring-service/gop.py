@@ -29,18 +29,16 @@ import numpy as np
 NEG_INF = -1e30
 
 
-def forced_align(log_probs: np.ndarray, targets: list[int], blank: int = 0):
-    """Align a known phone sequence to CTC frames.
+def _viterbi(log_probs: np.ndarray, targets: list[int], blank: int):
+    """Best CTC path over the blank-interleaved target sequence.
 
-    `log_probs` is [frames, vocab]; `targets` the expected phone ids. Returns
-    one (start, end) frame span per target phone.
-
-    Standard CTC alignment over the blank-interleaved sequence, so a phone may
-    occupy many frames and repeated phones stay separated by a blank.
+    Returns (alpha, back, extended, end), or None when the sequence cannot fit
+    in the available frames. Shared by `forced_align` and `alignment_score` so
+    the two can never drift apart.
     """
     n_frames = log_probs.shape[0]
     if not targets or n_frames == 0:
-        return []
+        return None
 
     # blank, y1, blank, y2, ... blank
     extended = [blank]
@@ -49,7 +47,7 @@ def forced_align(log_probs: np.ndarray, targets: list[int], blank: int = 0):
     length = len(extended)
 
     if n_frames < length // 2:
-        return []
+        return None
 
     alpha = np.full((n_frames, length), NEG_INF, dtype=np.float64)
     back = np.zeros((n_frames, length), dtype=np.int8)
@@ -78,6 +76,23 @@ def forced_align(log_probs: np.ndarray, targets: list[int], blank: int = 0):
     end = length - 1
     if length > 1 and alpha[n_frames - 1, length - 2] > alpha[n_frames - 1, end]:
         end = length - 2
+    return alpha, back, extended, end
+
+
+def forced_align(log_probs: np.ndarray, targets: list[int], blank: int = 0):
+    """Align a known phone sequence to CTC frames.
+
+    `log_probs` is [frames, vocab]; `targets` the expected phone ids. Returns
+    one (start, end) frame span per target phone.
+
+    Standard CTC alignment over the blank-interleaved sequence, so a phone may
+    occupy many frames and repeated phones stay separated by a blank.
+    """
+    result = _viterbi(log_probs, targets, blank)
+    if result is None:
+        return []
+    _alpha, back, _extended, end = result
+    n_frames = log_probs.shape[0]
 
     path = np.zeros(n_frames, dtype=np.int32)
     s = int(end)
@@ -95,6 +110,29 @@ def forced_align(log_probs: np.ndarray, targets: list[int], blank: int = 0):
     return spans
 
 
+def alignment_score(log_probs: np.ndarray, targets: list[int], blank: int = 0) -> float:
+    """Log-probability of the best path that reads the audio as `targets`.
+
+    Unlike `gop_per_phone`, this accounts for *every* frame, and its verdict
+    does not weaken as the word gets longer. A per-phone mean spreads the cost
+    of a missing sound across all the phones in the word, so the evidence for a
+    dropped aspiration in a long word is averaged down towards nothing; the
+    total path likelihood keeps it whole.
+
+    That matters for exactly the contrast this app cares about. `b` is a strict
+    subsequence of `b h`, so the plain hypothesis is never *ruled out* by a
+    missing target — it merely has to absorb the leftover frames — and how much
+    that shows up in a mean depends on how much else the word contains.
+
+    Returns NaN when the sequence cannot fit in the frames available.
+    """
+    result = _viterbi(log_probs, targets, blank)
+    if result is None:
+        return float("nan")
+    alpha, _back, _extended, end = result
+    return float(alpha[log_probs.shape[0] - 1, end])
+
+
 def gop_per_phone(log_probs: np.ndarray, targets: list[int], blank: int = 0) -> list[float]:
     """How confident the model is in each expected phone, 0 (certain) downwards."""
     spans = forced_align(log_probs, targets, blank)
@@ -110,6 +148,51 @@ def gop_per_phone(log_probs: np.ndarray, targets: list[int], blank: int = 0) -> 
             continue
         window = log_probs[start:end, phone_id] - frame_best[start:end]
         scores.append(float(window.mean()))
+    return scores
+
+
+def pooled_columns(log_probs: np.ndarray, slot_ids: list[list[int]], blank: int) -> np.ndarray:
+    """Collapse the vocabulary to one column per slot, plus a trailing blank.
+
+    A slot holds the several symbols this model might use for one expected
+    sound; pooling their probabilities means the alignment is not punished for
+    a notation choice. The result is a [frames, len(slots) + 1] matrix that
+    `forced_align`, `alignment_score` and `gop_per_slot` all accept, with the
+    blank as its last column.
+    """
+    columns = []
+    for ids in slot_ids:
+        if len(ids) == 1:
+            columns.append(log_probs[:, ids[0]])
+            continue
+        block = log_probs[:, ids]
+        peak = block.max(axis=1, keepdims=True)
+        columns.append((peak + np.log(np.exp(block - peak).sum(axis=1, keepdims=True)))[:, 0])
+    columns.append(log_probs[:, blank])
+    return np.stack(columns, axis=1)
+
+
+def gop_per_slot(log_probs: np.ndarray, slot_ids: list[list[int]], blank: int) -> list[float]:
+    """`gop_per_phone` over pooled slots rather than single symbols.
+
+    The reference stays the best phone over the *whole* vocabulary, not just
+    the pooled columns, so the scores remain comparable with `gop_per_phone`.
+    """
+    if not slot_ids:
+        return []
+    pooled = pooled_columns(log_probs, slot_ids, blank)
+    targets = list(range(len(slot_ids)))
+    spans = forced_align(pooled, targets, len(slot_ids))
+    if not spans:
+        return [float("nan")] * len(slot_ids)
+
+    frame_best = log_probs.max(axis=1)
+    scores: list[float] = []
+    for index, (start, end) in enumerate(spans):
+        if start < 0:
+            scores.append(float("nan"))
+            continue
+        scores.append(float((pooled[start:end, index] - frame_best[start:end]).mean()))
     return scores
 
 

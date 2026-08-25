@@ -131,6 +131,135 @@ def test_gop_is_strongly_negative_when_the_sound_is_absent():
 
 
 # ---------------------------------------------------------------------------
+# Whole-utterance alignment score
+# ---------------------------------------------------------------------------
+
+def test_alignment_score_prefers_the_sequence_that_was_actually_said():
+    log_probs = _log_probs([1, 2, 3], confidence=0.99)
+    said = gop.alignment_score(log_probs, [1, 2, 3], blank=0)
+    not_said = gop.alignment_score(log_probs, [3, 2, 1], blank=0)
+    assert said > not_said
+
+
+def test_alignment_score_declines_when_there_are_too_few_frames():
+    assert np.isnan(gop.alignment_score(_log_probs([1]), [1, 2, 3, 4], blank=0))
+
+
+def test_a_per_phone_mean_dilutes_a_dropped_sound_but_the_total_does_not():
+    """Why mispronunciation detection wants a whole-utterance measure.
+
+    Token 1 is `b`, token 2 is `h`, token 3 is a vowel, and the audio says all
+    three — an aspirated `bʰ`. The plain hypothesis [b, vowel] has no target
+    for the `h` frames and must absorb them, which costs it something either
+    way. But a per-phone *mean* spreads that cost across every phone in the
+    word, so the longer the word, the smaller the evidence gets — while the
+    total path likelihood keeps the whole penalty regardless of length.
+    """
+    short = _log_probs([1, 1, 1, 2, 2, 3, 3, 3], vocab_size=10, confidence=0.99)
+    long = _log_probs(
+        [1, 1, 1, 2, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7], vocab_size=10, confidence=0.99
+    )
+
+    def gop_margin(log_probs, aspirated, plain):
+        return float(
+            np.mean(gop.gop_per_phone(log_probs, aspirated, blank=0))
+            - np.mean(gop.gop_per_phone(log_probs, plain, blank=0))
+        )
+
+    short_gop = gop_margin(short, [1, 2, 3], [1, 3])
+    long_gop = gop_margin(long, [1, 2, 3, 4, 5, 6, 7], [1, 3, 4, 5, 6, 7])
+    assert short_gop > 0, "the aspirated reading should win on the short word"
+    assert long_gop < short_gop / 2, "the same evidence, watered down by word length"
+
+    def ll_margin(log_probs, aspirated, plain):
+        return gop.alignment_score(log_probs, aspirated, blank=0) - gop.alignment_score(
+            log_probs, plain, blank=0
+        )
+
+    short_ll = ll_margin(short, [1, 2, 3], [1, 3])
+    long_ll = ll_margin(long, [1, 2, 3, 4, 5, 6, 7], [1, 3, 4, 5, 6, 7])
+    assert short_ll > 1.0
+    assert long_ll == pytest.approx(short_ll), "length does not weaken the total"
+
+
+# ---------------------------------------------------------------------------
+# Pooled slots — one expected sound, several spellings
+# ---------------------------------------------------------------------------
+
+def test_pooling_adds_the_probability_of_every_spelling():
+    log_probs = _log_probs([1, 2], confidence=0.5)
+    pooled = gop.pooled_columns(log_probs, [[1, 2]], blank=0)
+    assert pooled.shape == (2, 2), "one slot column plus the blank"
+    # Pooling is a sum in probability space, so it beats either member alone.
+    assert pooled[0, 0] > log_probs[0, 1]
+    assert pooled[0, 0] > log_probs[0, 2]
+
+
+def test_a_single_symbol_slot_matches_the_unpooled_score():
+    log_probs = _log_probs([1, 2], confidence=0.99)
+    pooled = gop.gop_per_slot(log_probs, [[1], [2]], blank=0)
+    plain = gop.gop_per_phone(log_probs, [1, 2], blank=0)
+    assert pooled == pytest.approx(plain)
+
+
+def test_pooling_rescues_a_sound_the_model_spells_differently():
+    """The audio says token 2; we expect token 1, which the model never emits.
+
+    Alone, token 1 scores badly. Pooled with the spelling the model does use,
+    it scores as well as the truth — which is the whole point of
+    `phones.model_slots`.
+    """
+    log_probs = _log_probs([2, 2, 2], confidence=0.99)
+    unpooled = gop.gop_per_slot(log_probs, [[1]], blank=0)[0]
+    pooled = gop.gop_per_slot(log_probs, [[1, 2]], blank=0)[0]
+    assert unpooled < -2.0
+    assert pooled > -0.1
+
+
+# ---------------------------------------------------------------------------
+# How this recogniser spells Hindi
+# ---------------------------------------------------------------------------
+
+# The real vocabulary has `kh`/`th`/`ph` but no `bh`/`dh`/`gh`, which is why
+# some aspirated stops need two slots and others do not.
+_VOCAB = {"kʰ", "kh", "k", "bʰ", "b", "h", "aː", "pʰ", "ph", "f", "p", "t̪", "t"}
+
+
+def test_an_aspirated_stop_offers_the_spellings_the_model_uses():
+    slots = phones.model_slots("kʰ", _VOCAB)
+    assert len(slots) == 1
+    assert set(slots[0]) == {"kʰ", "kh"}
+
+
+def test_an_aspirated_stop_without_a_digraph_becomes_two_slots():
+    """`bʰ` is written `b` then a separate `h`, and that second slot is the
+    only thing distinguishing भाई from बाई."""
+    aspirated = phones.model_slots("bʰ", _VOCAB)
+    plain = phones.model_slots("b", _VOCAB)
+    assert len(aspirated) == 2
+    assert aspirated[1] == ("h",)
+    assert len(plain) == 1
+
+
+def test_symbols_the_model_does_not_have_are_dropped():
+    slots = phones.model_slots("pʰ", {"ph", "aː"})
+    assert slots == [("ph",)]
+
+
+def test_a_phone_with_no_special_spelling_passes_through():
+    assert phones.model_slots("aː", _VOCAB) == [("aː",)]
+
+
+def test_a_phone_the_model_cannot_spell_at_all_yields_nothing():
+    assert phones.model_slots("kʰ", {"aː"}) == []
+
+
+def test_word_slots_runs_the_whole_sequence():
+    slots = phones.word_slots(("bʰ", "aː"), _VOCAB)
+    assert slots == [("bʰ", "b"), ("h",), ("aː",)]
+
+
+# ---------------------------------------------------------------------------
 # Outlier flagging
 # ---------------------------------------------------------------------------
 
