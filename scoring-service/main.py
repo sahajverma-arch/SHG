@@ -50,14 +50,27 @@ _asr = None
 
 def _load_faster_whisper():
     """CTranslate2 backend. Needs the converted model — see README."""
-    from faster_whisper import WhisperModel
-
+    # Checked before the import so a missing conversion reports itself as such,
+    # rather than being masked by whatever the library does on the way in.
     if not Path(CT2_MODEL_PATH).is_dir():
         raise HTTPException(
             503,
             f"No CTranslate2 model at {CT2_MODEL_PATH}. Convert it (see "
             "scoring-service/README.md) or set ASR_BACKEND=transformers.",
         )
+
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError as exc:
+        # ctranslate2 ships a compiled extension, and it fails to load for
+        # reasons that have nothing to do with this service: no wheel for the
+        # platform, a missing runtime, or a Windows policy blocking the DLL.
+        # None of that should read as a bug in the caller's request.
+        raise HTTPException(
+            503,
+            f"faster-whisper could not be loaded ({exc}). Install it, or set "
+            "ASR_BACKEND=transformers to use the slower pure-Python backend.",
+        ) from exc
 
     model = WhisperModel(
         CT2_MODEL_PATH,
