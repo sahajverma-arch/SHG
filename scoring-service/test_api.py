@@ -142,6 +142,44 @@ def test_transcribe_tolerates_an_empty_upload(client, monkeypatch):
     assert body["text"] == ""
 
 
+# ---------------------------------------------------------------------------
+# /tts — which voice actually spoke
+# ---------------------------------------------------------------------------
+
+def test_a_prerendered_clip_is_served_and_says_so(client, tmp_path, monkeypatch):
+    import main
+    import tts_cache
+
+    text = "सूरज पूरब से निकलता है"
+    clip = tmp_path / f"{tts_cache.prerender_key(text)}.wav"
+    clip.write_bytes(b"RIFF....WAVEfake")
+    monkeypatch.setattr(main, "find_prerendered", lambda t: clip if t == text else None)
+
+    res = client.get("/tts", params={"text": text})
+    assert res.status_code == 200
+    assert res.content == b"RIFF....WAVEfake"
+    assert res.headers["x-tts-source"] == "prerendered"
+
+
+def test_falling_back_to_edge_tts_is_visible(client, monkeypatch):
+    """The fallback is silent on purpose — the button still speaks — which is
+    exactly why an empty tts-cache/ looked identical to a working one."""
+    import main
+
+    monkeypatch.setattr(main, "find_prerendered", lambda _t: None)
+    monkeypatch.setitem(main._TTS_CACHE, ("नमस्ते", True), b"fake-mp3")
+
+    res = client.get("/tts", params={"text": "नमस्ते", "slow": "true"})
+    assert res.status_code == 200
+    assert res.headers["x-tts-source"] == f"edge-tts:{main.TTS_VOICE}"
+
+
+def test_health_counts_prerendered_clips(client):
+    body = client.get("/health").json()
+    assert "tts_prerendered_clips" in body
+    assert body["tts_voice"]
+
+
 def test_health_reports_the_active_backend(client):
     body = client.get("/health").json()
     assert body["status"] == "ok"

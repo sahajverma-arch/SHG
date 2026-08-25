@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydub import AudioSegment
 
 from scoring import DEFAULT_LEVEL, score_attempt
-from tts_cache import find_prerendered
+from tts_cache import PRERENDER_DIR, find_prerendered
 
 SAMPLE_RATE = 16000
 
@@ -282,6 +282,13 @@ def health():
         # None until the first transcription loads the model.
         "device": _asr_device,
         "compute_type": _asr_compute_type,
+        "tts_voice": TTS_VOICE,
+        # 0 means every passage falls back to edge-tts. IndicF5 has to be
+        # rendered ahead of time (see README), and without this count an empty
+        # cache looks exactly like a working one.
+        "tts_prerendered_clips": (
+            len(list(PRERENDER_DIR.glob("*.wav"))) if PRERENDER_DIR.is_dir() else 0
+        ),
     }
 
 
@@ -327,12 +334,20 @@ async def tts(text: str, slow: bool = True):
     if len(text) > _TTS_MAX_CHARS:
         raise HTTPException(400, f"Text longer than {_TTS_MAX_CHARS} characters")
 
+    # Which voice actually spoke is otherwise invisible. Falling back from
+    # IndicF5 to edge-tts is silent by design — the button still works — but
+    # that also means an empty tts-cache/ is indistinguishable from a working
+    # pre-render, and someone checking the voice has no way to tell which one
+    # they just heard. The header says.
     pre = find_prerendered(text)
     if pre is not None:
         return Response(
             content=pre.read_bytes(),
             media_type="audio/wav",
-            headers={"Cache-Control": "public, max-age=86400"},
+            headers={
+                "Cache-Control": "public, max-age=86400",
+                "X-TTS-Source": "prerendered",
+            },
         )
 
     key = (text, slow)
@@ -367,7 +382,10 @@ async def tts(text: str, slow: bool = True):
     return Response(
         content=cached,
         media_type="audio/mpeg",
-        headers={"Cache-Control": "public, max-age=86400"},
+        headers={
+            "Cache-Control": "public, max-age=86400",
+            "X-TTS-Source": f"edge-tts:{TTS_VOICE}",
+        },
     )
 
 
