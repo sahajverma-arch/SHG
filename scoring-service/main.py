@@ -97,6 +97,12 @@ app.add_middleware(
     allow_origins=os.environ.get("CORS_ORIGIN", "http://localhost:3000").split(","),
     allow_methods=["POST", "GET"],
     allow_headers=["*"],
+    # CORS hides every response header outside a small safelist unless it is
+    # named here. X-TTS-Source exists so the voice in use is checkable rather
+    # than guessed at, and it read as null from the browser the moment the app
+    # was served from a different origin than this service — which is exactly
+    # when you most want to know.
+    expose_headers=["X-TTS-Source"],
 )
 
 _asr = None
