@@ -73,6 +73,17 @@ export async function recentAttempts(limit = 10): Promise<AttemptSummary[]> {
 export async function pickPassage(): Promise<Passage | null> {
   if (!supabase) return null;
 
+  // The session has to exist before the first query, not after it.
+  // `passages_read` requires an authenticated role, and RLS *filters* rather
+  // than refusing — so reading this table without a session returns an empty
+  // array rather than an error. That is indistinguishable from an unseeded
+  // database, and the caller falls back to the built-in passage.
+  //
+  // It only ever bit the first visit, because every later load found the
+  // session already in localStorage and refreshing appeared to "fix" it. Every
+  // new reader got the wrong passage exactly once.
+  const userId = await ensureAnonymousSession();
+
   const { data: passages } = await supabase
     .from("passages")
     .select("id, text_hi, level, difficulty")
@@ -80,7 +91,6 @@ export async function pickPassage(): Promise<Passage | null> {
 
   if (!passages || passages.length === 0) return null;
 
-  const userId = await ensureAnonymousSession();
   if (!userId) return passages[0] as Passage;
 
   const { data: attempts } = await supabase
