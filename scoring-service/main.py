@@ -31,10 +31,61 @@ CT2_MODEL_PATH = os.environ.get(
     "CT2_MODEL_PATH",
     str(Path(__file__).resolve().parent / "models" / "whisper-hindi-small-ct2"),
 )
-CT2_COMPUTE_TYPE = os.environ.get("CT2_COMPUTE_TYPE", "int8")
+# Device for the CTranslate2 backend. "auto" uses the GPU when there is one and
+# falls back to CPU otherwise, so the same checkout runs on a laptop with a
+# discrete card and on a plain CPU box without configuration.
+ASR_DEVICE = os.environ.get("ASR_DEVICE", "auto")
+# Left unset so the device chooses: float16 on GPU, int8 on CPU. Setting it
+# pins both.
+CT2_COMPUTE_TYPE = os.environ.get("CT2_COMPUTE_TYPE") or None
 # Greedy decoding. Beam search multiplies decode cost for little gain when the
 # expected text is already known and scoring is edit-distance based.
 BEAM_SIZE = int(os.environ.get("ASR_BEAM_SIZE", "1"))
+
+
+def _add_cuda_runtime_to_path() -> None:
+    """Let CTranslate2 find cuBLAS and cuDNN when pip supplied them.
+
+    The CUDA runtime is not bundled with ctranslate2; it arrives as the
+    `nvidia-cublas-cu12` / `nvidia-cudnn-cu12` wheels, which unpack into
+    site-packages rather than anywhere the loader looks. CTranslate2 asks for
+    `cublas64_12.dll` by bare name, and on Windows that search covers PATH but
+    *not* directories added through `os.add_dll_directory`, so PATH is what has
+    to be amended — before the first CUDA call, which is why this runs at
+    import.
+    """
+    import site
+
+    roots = list(site.getsitepackages())
+    if hasattr(site, "getusersitepackages"):
+        roots.append(site.getusersitepackages())
+
+    for root in roots:
+        for package in ("cublas", "cudnn"):
+            folder = Path(root) / "nvidia" / package / "bin"
+            if folder.is_dir() and str(folder) not in os.environ.get("PATH", ""):
+                os.environ["PATH"] = f"{folder}{os.pathsep}{os.environ.get('PATH', '')}"
+
+
+def _resolve_device() -> tuple[str, str]:
+    """(device, compute_type) actually usable on this machine."""
+    requested = ASR_DEVICE
+    if requested in ("auto", "cuda"):
+        _add_cuda_runtime_to_path()
+        try:
+            import ctranslate2
+
+            if ctranslate2.get_cuda_device_count() > 0:
+                return "cuda", CT2_COMPUTE_TYPE or "float16"
+        except Exception:
+            pass
+        if requested == "cuda":
+            raise HTTPException(
+                503,
+                "ASR_DEVICE=cuda but no usable CUDA device was found. Install "
+                "nvidia-cublas-cu12 and nvidia-cudnn-cu12, or set ASR_DEVICE=cpu.",
+            )
+    return "cpu", CT2_COMPUTE_TYPE or "int8"
 
 app = FastAPI(title="Hindi Pronunciation Scoring Service")
 
@@ -46,6 +97,10 @@ app.add_middleware(
 )
 
 _asr = None
+# Filled in when the CTranslate2 backend loads, and reported by /health so a
+# demo machine can be checked at a glance rather than by timing it.
+_asr_device: str | None = None
+_asr_compute_type: str | None = None
 
 
 def _load_faster_whisper():
@@ -72,12 +127,18 @@ def _load_faster_whisper():
             "ASR_BACKEND=transformers to use the slower pure-Python backend.",
         ) from exc
 
+    device, compute_type = _resolve_device()
     model = WhisperModel(
         CT2_MODEL_PATH,
-        device="cpu",
-        compute_type=CT2_COMPUTE_TYPE,
-        cpu_threads=os.cpu_count() or 4,
+        device=device,
+        compute_type=compute_type,
+        # Physical cores, not logical. CTranslate2's GEMMs are already
+        # vectorised, so handing it both hyperthreads per core oversubscribes
+        # them and measured slower here. Ignored on GPU.
+        cpu_threads=max((os.cpu_count() or 8) // 2, 1),
     )
+    global _asr_device, _asr_compute_type
+    _asr_device, _asr_compute_type = device, compute_type
 
     def run(wav: np.ndarray, _sr: int) -> str:
         segments, _info = model.transcribe(
@@ -191,6 +252,9 @@ def health():
         "model_loaded": _asr is not None,
         "backend": ASR_BACKEND,
         "model_id": MODEL_ID if ASR_BACKEND == "transformers" else CT2_MODEL_PATH,
+        # None until the first transcription loads the model.
+        "device": _asr_device,
+        "compute_type": _asr_compute_type,
     }
 
 

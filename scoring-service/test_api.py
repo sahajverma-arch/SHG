@@ -16,6 +16,7 @@ import types
 import wave
 
 import pytest
+from fastapi import HTTPException
 
 SAMPLE_RATE = 16000
 TRANSCRIPT = "आज रविवार है"
@@ -98,6 +99,32 @@ def test_faster_whisper_backend_reports_a_missing_model_clearly(client):
         assert "ASR_BACKEND=transformers" in str(excinfo.value.detail)
     finally:
         main.CT2_MODEL_PATH, main._asr = original_path, original_asr
+
+
+def test_cpu_is_chosen_when_the_gpu_is_not_asked_for(client):
+    import main
+
+    original = main.ASR_DEVICE
+    main.ASR_DEVICE = "cpu"
+    try:
+        assert main._resolve_device() == ("cpu", "int8")
+    finally:
+        main.ASR_DEVICE = original
+
+
+def test_asking_for_a_gpu_that_is_absent_says_so(client, monkeypatch):
+    """Better than falling back silently and looking merely slow."""
+    import main
+
+    monkeypatch.setattr(main, "ASR_DEVICE", "cuda")
+    monkeypatch.setattr(main, "_add_cuda_runtime_to_path", lambda: None)
+
+    import ctranslate2
+
+    monkeypatch.setattr(ctranslate2, "get_cuda_device_count", lambda: 0)
+    with pytest.raises(HTTPException) as excinfo:
+        main._resolve_device()
+    assert "ASR_DEVICE=cpu" in excinfo.value.detail
 
 
 def test_unknown_backend_is_rejected(client):
