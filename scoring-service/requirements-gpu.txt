@@ -1,0 +1,24 @@
+# Optional: run the CTranslate2 ASR backend on an NVIDIA GPU.
+#
+#   pip install -r requirements-gpu.txt
+#
+# Nothing else changes. `ASR_DEVICE` defaults to "auto", so the service picks
+# the GPU up on its own once these are present and falls back to CPU when they
+# are not. Force either with ASR_DEVICE=cuda / ASR_DEVICE=cpu.
+#
+# Measured on an RTX 3060 Laptop (6GB) against a Ryzen 7 5800H, 12.2s of Hindi,
+# whisper-hindi-small, greedy decoding:
+#
+#   cuda / float16   1.6s   7.6x realtime
+#   cpu  / int8      4.2s   2.9x realtime
+#
+# The weights are ~250MB in float16, so 6GB is far more than enough.
+#
+# ctranslate2 does not bundle the CUDA runtime and loads `cublas64_12.dll` by
+# bare name. These wheels unpack into site-packages, which is not on the
+# loader's search path, so `main._add_cuda_runtime_to_path` prepends them to
+# PATH at import. That is why no manual CUDA Toolkit install is needed.
+#
+# ctranslate2 4.x wants CUDA 12 and cuDNN 9; these are the matching wheels.
+nvidia-cublas-cu12
+nvidia-cudnn-cu12

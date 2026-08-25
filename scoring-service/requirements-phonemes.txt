@@ -1,0 +1,23 @@
+# Optional: the phoneme-scoring research path (see docs/phoneme-scoring.md).
+#
+# NOT needed to run the service. These support the experiment that measured
+# phoneme-level pronunciation scoring for Hindi and found it not accurate
+# enough to ship. Install only to reproduce those results or to pick the work
+# back up when a Hindi-specific phoneme model exists.
+
+# espeak-ng Hindi grapheme-to-phoneme. espeakng-loader ships the library and
+# its data as package files, so no administrator install is required.
+espeakng-loader
+phonemizer
+
+# The phone recogniser itself rides on transformers + torch, already in
+# requirements.txt for the fallback ASR backend.
+
+# The evaluations synthesise their own mispronunciations — a passage read
+# once correctly and once with a planted error — and compare the two.
+#
+# Deliberately gTTS and not the edge-tts the service now speaks with. Every
+# measurement in docs/phoneme-scoring.md was taken against gTTS audio, so
+# changing the voice would silently invalidate the comparisons rather than
+# improve them. This is a measurement instrument, not a feature.
+gTTS

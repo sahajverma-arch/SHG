@@ -43,25 +43,20 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 px-6 backdrop-blur-sm">
-      <div className="card relative w-full max-w-sm p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/30 backdrop-blur-sm sm:items-center sm:px-6">
+      <div className="card relative w-full rounded-b-none p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:max-w-sm sm:rounded-b-[0.875rem] sm:pb-5">
         <button
           onClick={onClose}
           aria-label="Close"
-          className="icon-btn clr-blue absolute right-4 top-4 h-8 w-8 text-sm"
+          className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:text-foreground"
         >
           ✕
         </button>
 
         {step === "form" && (
           <form onSubmit={submitForm} className="flex flex-col gap-3">
-            <span className="icon-badge h-11 w-11 bg-brand-blue/15 text-xl">
-              🔐
-            </span>
-            <h2 className="font-[family-name:var(--font-display)] text-xl text-brand-blue">
-              Save your streak
-            </h2>
-            <p className="text-sm text-foreground/60">
+            <h2 className="text-lg font-semibold">Save your streak</h2>
+            <p className="text-sm text-muted">
               So it&apos;s still here next time, on any device.
             </p>
             <input
@@ -69,7 +64,7 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
               placeholder="Your name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="rounded-xl border-2 border-border bg-background px-3 py-2 text-foreground outline-none transition-colors focus:border-brand-blue"
+              className="min-h-[2.875rem] rounded-lg border border-border bg-surface px-3 py-2 text-base outline-none transition-colors focus:border-accent"
             />
             <input
               required
@@ -77,12 +72,12 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="rounded-xl border-2 border-border bg-background px-3 py-2 text-foreground outline-none transition-colors focus:border-brand-blue"
+              className="min-h-[2.875rem] rounded-lg border border-border bg-surface px-3 py-2 text-base outline-none transition-colors focus:border-accent"
             />
-            {error && <p className="text-sm font-semibold text-brand-pink">{error}</p>}
+            {error && <p className="text-sm text-warn">{error}</p>}
             <button
               disabled={busy}
-              className="btn btn-solid clr-blue mt-1 w-full text-sm"
+              className="btn btn-primary mt-1 w-full"
             >
               {busy ? "Sending…" : "Send code"}
             </button>
@@ -91,13 +86,8 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
 
         {step === "otp" && (
           <form onSubmit={submitOtp} className="flex flex-col gap-3">
-            <span className="icon-badge h-11 w-11 bg-brand-blue/15 text-xl">
-              ✉️
-            </span>
-            <h2 className="font-[family-name:var(--font-display)] text-xl text-brand-blue">
-              Check your email
-            </h2>
-            <p className="text-sm text-foreground/60">
+            <h2 className="text-lg font-semibold">Check your email</h2>
+            <p className="text-sm text-muted">
               Enter the 6-digit code sent to {email}.
             </p>
             <input
@@ -106,12 +96,12 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
               placeholder="123456"
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
-              className="rounded-xl border-2 border-border bg-background px-3 py-2 text-center text-lg tracking-widest text-foreground outline-none transition-colors focus:border-brand-blue"
+              className="min-h-[2.875rem] rounded-lg border border-border bg-surface px-3 py-2 text-center text-lg tracking-widest outline-none transition-colors focus:border-accent"
             />
-            {error && <p className="text-sm font-semibold text-brand-pink">{error}</p>}
+            {error && <p className="text-sm text-warn">{error}</p>}
             <button
               disabled={busy}
-              className="btn btn-solid clr-blue mt-1 w-full text-sm"
+              className="btn btn-primary mt-1 w-full"
             >
               {busy ? "Checking…" : "Confirm"}
             </button>
@@ -119,13 +109,8 @@ export function LoginModal({ onClose }: { onClose: () => void }) {
         )}
 
         {step === "success" && (
-          <div className="py-4 text-center">
-            <span className="icon-badge float mx-auto h-14 w-14 bg-brand-green/15 text-3xl">
-              🎉
-            </span>
-            <p className="mt-3 text-lg font-bold text-brand-green">
-              You&apos;re all set!
-            </p>
+          <div className="py-6 text-center">
+            <p className="text-base font-semibold text-good">You&apos;re all set!</p>
           </div>
         )}
       </div>

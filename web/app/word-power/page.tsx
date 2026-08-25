@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Celebrate } from "@/components/Celebrate";
 import { useStreak } from "@/lib/streak";
@@ -69,73 +70,62 @@ export default function WordPowerPage() {
 
   if (finished) {
     return (
-      <main className="mx-auto max-w-2xl px-6 py-14">
-        <Celebrate message={`शाबाश! You scored ${score} / ${order.length}`} />
-        <button
-          onClick={playAgain}
-          className="btn btn-solid clr-blue mx-auto mt-6 block text-sm"
-        >
-          Play again
-        </button>
+      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
+        <Celebrate message={`शाबाश! ${score} out of ${order.length}`} />
+        <div className="mt-4 flex gap-3">
+          <button onClick={playAgain} className="btn btn-primary flex-1">
+            Play again
+          </button>
+          <Link href="/" className="btn btn-quiet flex-1">
+            Done
+          </Link>
+        </div>
       </main>
     );
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-14">
-      <div className="flex items-center gap-3">
-        <span className="icon-badge h-11 w-11 bg-brand-blue/15 text-xl">
-          🧩
-        </span>
-        <div>
-          <h1 className="font-[family-name:var(--font-display)] text-2xl text-brand-blue">
-            शब्द शक्ति
-          </h1>
-          <p className="text-sm text-foreground/60">
-            Question {index + 1} of {order.length}
-          </p>
-        </div>
-      </div>
+    <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
+      <p className="eyebrow">Word power · {index + 1} of {order.length}</p>
+      <h1 className="mt-1 text-2xl font-semibold sm:text-3xl">शब्द शक्ति</h1>
 
-      <div className="mt-2 flex gap-1.5">
+      <div className="mt-4 flex h-1 gap-1">
         {order.map((_, i) => (
           <span
             key={i}
-            className={`h-1.5 flex-1 rounded-full transition-colors ${
-              i < index
-                ? "bg-brand-blue"
-                : i === index
-                  ? "bg-brand-blue/50"
-                  : "bg-border"
+            className={`flex-1 rounded-full transition-colors duration-300 ${
+              i < index ? "bg-accent" : i === index ? "bg-accent/45" : "bg-border"
             }`}
           />
         ))}
       </div>
 
-      <div className="card mt-6 p-8 text-center">
-        <p className="text-4xl font-bold text-foreground">{question.word}</p>
+      <div className="reading-surface mt-5 px-4 py-12 text-center">
+        <p className="font-[family-name:var(--font-read)] text-4xl leading-tight sm:text-5xl">
+          {question.word}
+        </p>
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-3">
+      <div className="mt-5 grid grid-cols-2 gap-2.5">
         {shuffledOptions.map((option) => {
           const isCorrect = option === question.correct;
           const isPicked = option === selected;
           const revealed = selected !== null;
 
           const stateClass = !revealed
-            ? "btn-outline clr-blue"
+            ? "btn-quiet"
             : isCorrect
-              ? "btn-solid clr-green"
+              ? "border-good bg-good/10 text-good"
               : isPicked
-                ? "btn-solid clr-pink"
-                : "btn-outline clr-blue opacity-40";
+                ? "border-warn bg-warn/10 text-warn"
+                : "btn-quiet opacity-40";
 
           return (
             <button
               key={option}
               onClick={() => choose(option)}
               disabled={revealed}
-              className={`btn ${stateClass} w-full text-base`}
+              className={`btn w-full border ${stateClass}`}
             >
               {option}
             </button>

@@ -6,20 +6,21 @@ export function StreakBadge() {
   const { streak, practicedToday } = useStreak();
 
   return (
-    <div
-      className={`icon-badge gap-1.5 border-2 px-3 py-1.5 text-sm font-bold ${
+    <span
+      className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-sm font-semibold tabular-nums ${
         practicedToday
-          ? "border-brand-orange bg-brand-orange/15 text-brand-orange"
-          : "border-border bg-surface text-foreground/40"
+          ? "border-border text-foreground"
+          : "border-border text-muted"
       }`}
       title={
         practicedToday
-          ? "Practiced today — streak safe!"
+          ? "Practised today"
           : "Do an exercise today to keep your streak"
       }
     >
-      <span aria-hidden>🔥</span>
-      <span className="tabular-nums">{streak}</span>
-    </div>
+      <span aria-hidden>{practicedToday ? "●" : "○"}</span>
+      {streak}
+      <span className="sr-only">day streak</span>
+    </span>
   );
 }

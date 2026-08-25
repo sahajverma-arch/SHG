@@ -1,6 +1,23 @@
 fastapi
 uvicorn[standard]
 python-multipart
+pydub
+numpy
+
+# Default ASR backend: the CTranslate2 build of the same Whisper weights.
+# ~40x faster than transformers on CPU (see README).
+faster-whisper
+
+# Hindi speech for the "Hear it first" button. Browsers cannot be relied on
+# here — Windows ships no hi-IN voice at all.
+#
+# Drives Microsoft Edge's "Read aloud" neural voices over the same unofficial
+# channel the browser feature itself uses — free, no account, and noticeably
+# less robotic than Google Translate's TTS (gTTS).
+edge-tts
+
+# Needed to convert the weights (one-off, see README) and for the fallback
+# ASR_BACKEND=transformers. Both are large; skip them if you already have a
+# converted model and don't want the fallback.
 transformers
 torch
-pydub

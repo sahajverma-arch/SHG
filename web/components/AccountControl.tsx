@@ -14,12 +14,12 @@ export function AccountControl() {
   if (user && !user.isAnonymous) {
     return (
       <div className="flex items-center gap-2 text-sm">
-        <span className="font-semibold text-foreground/80">
+        <span className="max-w-[8rem] truncate font-medium">
           {user.name ?? user.email}
         </span>
         <button
           onClick={signOut}
-          className="text-foreground/40 underline underline-offset-2 hover:text-foreground/60"
+          className="text-muted underline underline-offset-2 hover:text-foreground"
         >
           Sign out
         </button>
@@ -31,7 +31,7 @@ export function AccountControl() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="btn btn-outline clr-blue text-sm"
+        className="btn btn-quiet px-3 text-sm"
       >
         Save progress
       </button>
