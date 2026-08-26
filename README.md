@@ -105,6 +105,51 @@ Which voice you are actually hearing is checkable rather than guessable:
 naming the tier that spoke. A wrong key never breaks the button — it falls
 through to the tier below and says so in that header.
 
+## Deploying to Vercel
+
+Two projects from this one repo — Vercel's normal monorepo shape. Nothing is
+restructured and no code changes: Vercel looks for a FastAPI instance named
+`app` in `main.py`, which is what the scoring service already has.
+
+| project | Root Directory | becomes |
+| --- | --- | --- |
+| `shg-api` | `scoring-service` | the FastAPI function |
+| `shg-web` | `web` | the Next.js app |
+
+**Deploy the API first** — the web app needs its URL at build time.
+
+1. New Project → import this repo → **Root Directory: `scoring-service`**.
+2. Environment variables:
+   - `SARVAM_API_KEY` — the same key as local
+   - `ASR_BACKEND=sarvam` — **required.** Without it the service tries to load
+     Whisper, which is not installed there and never will be.
+   - `CORS_ORIGIN` — the web app's URL, once step 4 gives you one.
+3. Deploy, then check `/health`: `tts_sarvam_configured` must be `true` and
+   `tts_sarvam_cached_clips` must be `12`.
+4. New Project → same repo → **Root Directory: `web`**, and set
+   `NEXT_PUBLIC_SCORING_SERVICE_URL` to the API project's URL, plus the two
+   Supabase variables from below.
+5. Go back and set `CORS_ORIGIN` on the API project to the web URL, then
+   redeploy it.
+
+**What makes this deployable at all** is `ASR_BACKEND=sarvam`: speech
+recognition becomes a network call, so `torch`, `faster-whisper`,
+`transformers` and ~240MB of converted weights all leave the bundle.
+`requirements.txt` is what the deployment installs; `requirements-local.txt` is
+the GPU path and is still the better choice for development, where a slice is
+sub-second, offline and free.
+
+**Two things that cost money quietly if you get them wrong.**
+
+`tts_sarvam_cached_clips: 0` on a deployment means the committed Bulbul clips
+did not ship, and every passage is being re-synthesised and re-billed on every
+cold start — silently, because the audio still plays. The 12 clips are in the
+repo precisely to stop that.
+
+Live tracking sends a slice every 2 seconds, and each one is now a billed API
+call rather than free local GPU time. A full reading costs roughly ₹1 all in.
+Fine for a demo and for a classroom; worth measuring before a public launch.
+
 ## Supabase — for the streak to survive a cleared cache
 
 Without it, the streak lives in this browser's `localStorage` — it works,

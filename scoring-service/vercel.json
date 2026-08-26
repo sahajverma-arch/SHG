@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "main.py": {
+      "maxDuration": 60,
+      "excludeFiles": "{models/**,tts-prompts/**,.venv/**,__pycache__/**,.pytest_cache/**,test_*.py,eval_*.py,diag_*.py,bench_*.py,dump_*.py,prerender_tts.py,*.md}"
+    }
+  }
+}

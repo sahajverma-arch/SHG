@@ -5,7 +5,22 @@ __pycache__/
 
 # Converted ASR weights (~240 MB) - rebuild with the command in README.md
 models/
-tts-cache/
+
+# IndicF5 clips stay out: they are large, they are now only the fallback tier,
+# and they cannot be regenerated without a GPU and gated weights anyway.
+tts-cache/*
+!tts-cache/sarvam/
+
+# The Bulbul clips for the six stored passages DO ship (~8MB).
+#
+# A serverless function's filesystem is read-only apart from /tmp, and /tmp
+# does not survive a cold start, so without these production would call the TTS
+# API again for every passage on every cold start -- billed per character, and
+# silent, because the audio still plays. Committing them makes the deployed app
+# cost nothing to speak the passages it ships with.
+#
+# Editing a passage orphans its clip: re-run `python sarvam_tts.py --file
+# passages.txt` and commit the new one, or that passage quietly drops a tier.
 
 # Reference voice prompt for IndicF5 - prerender_tts.py fetches it on demand
 tts-prompts/

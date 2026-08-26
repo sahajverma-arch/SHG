@@ -40,6 +40,7 @@ import base64
 import io
 import json
 import os
+import tempfile
 import urllib.error
 import urllib.request
 import wave
@@ -76,7 +77,28 @@ PACE_NORMAL = float(os.environ.get("SARVAM_TTS_PACE_NORMAL", "1.0"))
 # raised cap upstream turns into a clean fallback instead of a 400 from Sarvam.
 MAX_CHARS = 2500
 
-CACHE_DIR = Path(os.environ.get("SARVAM_TTS_CACHE_DIR", str(PRERENDER_DIR / "sarvam")))
+# Where clips are read from, and where new ones are written.
+#
+# These differ in a serverless deployment, and getting that wrong is a bill
+# rather than a bug. A function's bundle is read-only and its /tmp does not
+# survive a cold start, so a single cache directory would mean re-paying for
+# every passage every time an instance spun up -- silently, since the audio
+# still plays.
+#
+# So: reads check the bundled directory too. The six stored passages can be
+# rendered once and committed (about 6MB), and then production never calls the
+# TTS API for them at all. Writes go somewhere writable for everything else --
+# a custom sentence, a new passage -- which /tmp handles for as long as the
+# instance lives.
+BUNDLED_DIR = PRERENDER_DIR / "sarvam"
+CACHE_DIR = Path(
+    os.environ.get("SARVAM_TTS_CACHE_DIR")
+    or (
+        str(Path(tempfile.gettempdir()) / "shg-tts")
+        if os.environ.get("VERCEL")
+        else str(BUNDLED_DIR)
+    )
+)
 
 TIMEOUT = float(os.environ.get("SARVAM_TTS_TIMEOUT", "20"))
 
@@ -132,8 +154,18 @@ def cached_path(text: str, slow: bool) -> Path:
 
 
 def find_cached(text: str, slow: bool) -> Path | None:
-    path = cached_path(text, slow)
-    return path if path.is_file() else None
+    """Look in the writable cache first, then in whatever shipped with the code.
+
+    Order matters only in that a locally re-rendered clip should win over a
+    stale committed one; in practice the two are the same file on a laptop.
+    """
+    suffix = "slow" if slow else "normal"
+    name = f"{prerender_key(text)}-{suffix}.wav"
+    for directory in (CACHE_DIR, BUNDLED_DIR):
+        path = directory / name
+        if path.is_file():
+            return path
+    return None
 
 
 def synthesise(text: str, slow: bool = True) -> bytes | None:

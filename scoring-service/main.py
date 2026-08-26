@@ -363,7 +363,17 @@ def health():
         # and a working one look identical from the outside.
         "tts_sarvam_configured": sarvam_tts.configured(),
         "tts_sarvam_voice": f"{sarvam_tts.MODEL}:{sarvam_tts.SPEAKER}",
+        # Split, because in a deployment they are different places and only one
+        # of them survives a cold start. `bundled` is what shipped with the code
+        # and is free forever; `writable` is /tmp and empties without warning,
+        # so a production instance showing 0 bundled clips is re-paying for
+        # every passage it speaks.
         "tts_sarvam_cached_clips": (
+            len(list(sarvam_tts.BUNDLED_DIR.glob("*.wav")))
+            if sarvam_tts.BUNDLED_DIR.is_dir()
+            else 0
+        ),
+        "tts_sarvam_writable_clips": (
             len(list(sarvam_tts.CACHE_DIR.glob("*.wav")))
             if sarvam_tts.CACHE_DIR.is_dir()
             else 0
