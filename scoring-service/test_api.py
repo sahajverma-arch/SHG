@@ -257,21 +257,62 @@ def test_a_dead_key_still_speaks(client, monkeypatch):
     assert res.headers["x-tts-source"] == f"edge-tts:{main.TTS_VOICE}"
 
 
-def test_prefer_sarvam_overrides_a_prerendered_clip(client, tmp_path, monkeypatch):
-    """One app, one voice — when someone decides Bulbul is the better one."""
+def test_bulbul_outranks_a_prerendered_clip(client, tmp_path, monkeypatch):
+    """One app, one voice. Bulbul won the side-by-side, so it leads even where
+    an IndicF5 clip exists for the same passage."""
     import main
     import sarvam_tts
 
-    stale = tmp_path / "indicf5.wav"
-    stale.write_bytes(b"RIFF....WAVEindicf5")
-    monkeypatch.setattr(main, "find_prerendered", lambda _t: stale)
-    monkeypatch.setattr(main, "TTS_PREFER_SARVAM", True)
+    indicf5 = tmp_path / "indicf5.wav"
+    indicf5.write_bytes(b"RIFF....WAVEindicf5")
+    monkeypatch.setattr(main, "find_prerendered", lambda _t: indicf5)
     monkeypatch.setattr(sarvam_tts, "api_key", lambda: "test-key")
     monkeypatch.setattr(sarvam_tts, "synthesise", lambda _t, _s: b"RIFF....WAVEbulbul")
 
     res = client.get("/tts", params={"text": "सूरज पूरब से निकलता है"})
     assert res.content == b"RIFF....WAVEbulbul"
     assert res.headers["x-tts-source"].startswith("sarvam:")
+
+
+def test_prefer_indicf5_puts_it_back_in_front(client, tmp_path, monkeypatch):
+    """The old order is still one environment variable away."""
+    import main
+    import sarvam_tts
+
+    indicf5 = tmp_path / "indicf5.wav"
+    indicf5.write_bytes(b"RIFF....WAVEindicf5")
+    monkeypatch.setattr(main, "find_prerendered", lambda _t: indicf5)
+    monkeypatch.setattr(main, "TTS_PREFER_INDICF5", True)
+    monkeypatch.setattr(sarvam_tts, "api_key", lambda: "test-key")
+
+    def fail(*_args, **_kwargs):
+        raise AssertionError("IndicF5 was preferred; Bulbul must not be billed")
+
+    monkeypatch.setattr(sarvam_tts, "synthesise", fail)
+
+    res = client.get("/tts", params={"text": "सूरज पूरब से निकलता है"})
+    assert res.content == b"RIFF....WAVEindicf5"
+    assert res.headers["x-tts-source"] == "prerendered"
+
+
+def test_without_a_key_indicf5_still_beats_edge_tts(client, tmp_path, monkeypatch):
+    """What Sahaj's clone does before he adds a key of his own.
+
+    Demoting IndicF5 below Bulbul must not demote it below edge-tts too: a
+    pre-rendered clip is still far better than the robotic fallback, so losing
+    the key should cost the good voice only where nothing was rendered.
+    """
+    import main
+    import sarvam_tts
+
+    indicf5 = tmp_path / "indicf5.wav"
+    indicf5.write_bytes(b"RIFF....WAVEindicf5")
+    monkeypatch.setattr(main, "find_prerendered", lambda _t: indicf5)
+    monkeypatch.setattr(sarvam_tts, "api_key", lambda: None)
+
+    res = client.get("/tts", params={"text": "सूरज पूरब से निकलता है"})
+    assert res.content == b"RIFF....WAVEindicf5"
+    assert res.headers["x-tts-source"] == "prerendered"
 
 
 def test_the_slow_and_normal_readings_are_cached_apart(monkeypatch):

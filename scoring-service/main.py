@@ -308,7 +308,7 @@ def health():
             if sarvam_tts.CACHE_DIR.is_dir()
             else 0
         ),
-        "tts_prefer_sarvam": TTS_PREFER_SARVAM,
+        "tts_prefer_indicf5": TTS_PREFER_INDICF5,
     }
 
 
@@ -345,16 +345,37 @@ _TTS_CACHE: "OrderedDict[tuple[str, bool], bytes]" = OrderedDict()
 _TTS_CACHE_MAX = 32
 _TTS_MAX_CHARS = 800
 
-# Two good voices for one app is one too many. IndicF5 rendered six passages;
-# Bulbul renders everything, including those six if asked. Which of the two
-# should win where they overlap is a judgement to make by ear, not from the
-# model cards -- so it is a flag, and the default keeps clips already paid for
-# in GPU time. Set TTS_PREFER_SARVAM=1 to hear the whole app in one voice.
-TTS_PREFER_SARVAM = os.environ.get("TTS_PREFER_SARVAM", "").lower() in {
+# Two good voices for one app is one too many, and Bulbul won the side-by-side
+# on 2026-08-26 -- same passage, both voices, picked by ear. It also covers
+# every passage rather than the six IndicF5 was ever run on, so the app now
+# sounds like one reader instead of two.
+#
+# IndicF5 stays as the tier behind it rather than being deleted: a clone with
+# no SARVAM_API_KEY still gets a good voice for whatever it has rendered, which
+# is the difference between a degraded demo and a robotic one.
+# TTS_PREFER_INDICF5=1 puts it back in front.
+TTS_PREFER_INDICF5 = os.environ.get("TTS_PREFER_INDICF5", "").lower() in {
     "1",
     "true",
     "yes",
 }
+
+
+def _speak(audio: bytes, source: str) -> Response:
+    """One audio response, however it was produced.
+
+    Every tier answers with wav now, and every tier names itself in
+    X-TTS-Source -- the header is the only way to tell a working cache from a
+    silently degraded one.
+    """
+    return Response(
+        content=audio,
+        media_type="audio/wav",
+        headers={
+            "Cache-Control": "public, max-age=86400",
+            "X-TTS-Source": source,
+        },
+    )
 
 
 @app.get("/tts")
@@ -365,22 +386,18 @@ async def tts(text: str, slow: bool = True):
     if len(text) > _TTS_MAX_CHARS:
         raise HTTPException(400, f"Text longer than {_TTS_MAX_CHARS} characters")
 
-    # Which voice actually spoke is otherwise invisible. Falling back from
-    # IndicF5 to edge-tts is silent by design — the button still works — but
-    # that also means an empty tts-cache/ is indistinguishable from a working
-    # pre-render, and someone checking the voice has no way to tell which one
-    # they just heard. The header says.
-    if not (TTS_PREFER_SARVAM and sarvam_tts.configured()):
+    # Which voice actually spoke is otherwise invisible. Every fallback here is
+    # silent by design — the button still works — but that also means an empty
+    # tts-cache/ is indistinguishable from a working one, and someone checking
+    # the voice has no way to tell which one they just heard. The header says.
+    def indicf5():
         pre = find_prerendered(text)
-        if pre is not None:
-            return Response(
-                content=pre.read_bytes(),
-                media_type="audio/wav",
-                headers={
-                    "Cache-Control": "public, max-age=86400",
-                    "X-TTS-Source": "prerendered",
-                },
-            )
+        if pre is None:
+            return None
+        return _speak(pre.read_bytes(), "prerendered")
+
+    if TTS_PREFER_INDICF5 and (clip := indicf5()) is not None:
+        return clip
 
     # Bulbul: any passage, not just the six someone pre-rendered. Billed per
     # character, so the disk cache is checked first and every rendered clip is
@@ -388,30 +405,22 @@ async def tts(text: str, slow: bool = True):
     voice = f"{sarvam_tts.MODEL}:{sarvam_tts.SPEAKER}"
     hit = sarvam_tts.find_cached(text, slow)
     if hit is not None:
-        return Response(
-            content=hit.read_bytes(),
-            media_type="audio/wav",
-            headers={
-                "Cache-Control": "public, max-age=86400",
-                "X-TTS-Source": f"sarvam-cache:{voice}",
-            },
-        )
+        return _speak(hit.read_bytes(), f"sarvam-cache:{voice}")
 
     if sarvam_tts.configured():
         # urllib blocks, and blocking the event loop here would stall every
         # other request behind one synthesis.
         spoken = await run_in_threadpool(sarvam_tts.synthesise, text, slow)
         if spoken:
-            return Response(
-                content=spoken,
-                media_type="audio/wav",
-                headers={
-                    "Cache-Control": "public, max-age=86400",
-                    "X-TTS-Source": f"sarvam:{voice}",
-                },
-            )
+            return _speak(spoken, f"sarvam:{voice}")
         # Falls through on purpose. A bad key or an empty balance costs the
-        # child nothing: edge-tts still speaks, and the header still says so.
+        # child nothing: the tiers below still speak, and the header says so.
+
+    # No key, no network, or nothing rendered for this text: a pre-rendered
+    # IndicF5 clip is still far better than edge-tts, so it is tried before
+    # giving up on a good voice rather than after.
+    if (clip := indicf5()) is not None:
+        return clip
 
     key = (text, slow)
     cached = _TTS_CACHE.get(key)
