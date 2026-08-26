@@ -10,17 +10,23 @@ and is likelier to be cut mid-word. This replays a known reading through
 /transcribe exactly as the client does - drain the buffer, send, accumulate -
 and reports both the latency and how much of the passage was recovered.
 
-It is where the table in `web/lib/liveReading.ts` came from, and why CHUNK_MS
-is 2000 rather than something smaller:
+It is where the table in `web/lib/liveReading.ts` came from. Run it against
+whichever backend is configured - the answer differs, and that is the point:
 
-    interval   words tracked   felt lag
-      3.0s      100% / 96%       ~1.95s
-      2.0s      100% / 96%       ~1.39s
-      1.2s       60% / 44%       ~0.87s
+    interval   Whisper (local)   Sarvam (hosted)
+      3.0s       100% / 96%        100% / 96%
+      2.0s       100% / 96%        100% / 100%
+      1.2s        60% / 44%        100% / 100%
+      0.8s            -            100% / 96%
 
-1.2s was tried and reverted. Re-run this after anything that changes ASR
-speed - a faster backend does not automatically make a shorter interval safe,
-because the limit is how much speech fits in a slice, not how fast it decodes.
+CHUNK_MS was 2000 under Whisper because 1.2s lost the reading; it is 1200 now
+because the same interval tracks perfectly through Sarvam. Whisper re-decodes a
+slice that ends mid-word and a short interval produced those constantly, which
+was a property of the recogniser rather than of the tracker.
+
+So: re-run this after changing ASR backend, not only after changing ASR speed.
+A faster backend does not automatically make a shorter interval safe, and -- as
+this table shows -- a slower one can.
 """
 
 import io

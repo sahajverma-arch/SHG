@@ -31,27 +31,38 @@ const FOLD: Record<string, string> = {
 // How long a reader waits to see a word light up is this interval plus one
 // round trip, and the interval dominates. It cannot simply be made small: each
 // flush sends only the audio since the last one, so a short interval means
-// short slices, and a slice that cuts a word in half transcribes neither
-// half.
+// short slices, and a slice that cuts a word in half transcribes neither half.
 //
-// Replaying two known readings through the service, counting how many passage
-// words the tracker actually matched:
+// Re-measured against ASR_BACKEND=sarvam (`bench_tracking.py`), replaying two
+// known readings and counting how many passage words the tracker matched:
 //
 //   interval   words tracked   felt lag
-//     3.0s      100% / 96%       ~1.95s
-//     2.0s      100% / 96%       ~1.39s
-//     1.2s       60% / 44%       ~0.87s
+//     3.0s      100% / 96%       ~2.10s
+//     2.0s      100% / 100%      ~1.48s
+//     1.2s      100% / 100%      ~1.03s
+//     0.8s      100% / 96%       ~0.92s
 //
-// So 2s: a third off the lag for no accuracy. Below that the tracker starts
-// losing the reading, which looks far worse than a slight delay.
-const CHUNK_MS = 2000;
+// 1.2s was 60%/44% under Whisper and is 100%/100% here, which is why this
+// number moved: the old floor was the recogniser's, not the tracker's. Whisper
+// re-decodes a slice that ends mid-word, and a short interval produced those
+// constantly; a hosted recogniser simply returns what it heard.
+//
+// 0.8s buys 0.11s more and starts losing words again, so this is the bottom.
+//
+// Cost is roughly flat across these settings even though the call count is
+// not: each flush sends only new audio, so the billed total is the length of
+// the reading either way.
+const CHUNK_MS = 1200;
 // A slice is hard-capped so that falling behind drops the oldest audio instead
 // of letting slices grow into a spiral the tracker never recovers from.
 // Progress may skip; it will not stall the recording.
 //
-// 4s specifically: shorter slices carry less context and are likelier to end
-// mid-word, which is what makes Whisper re-decode. Measured over arbitrary cut
-// points, 3s slices had a worst case of 8.67s against 0.73s for 4s ones.
+// 4s was chosen when Whisper ran this: shorter slices end mid-word more often,
+// which made it re-decode, and the worst case over arbitrary cut points was
+// 8.67s for 3s slices against 0.73s for 4s ones. That reasoning belongs to the
+// faster-whisper backend and still holds there. It is kept for the hosted
+// backend on the simpler ground that a cap has to exist, and 4s is far below
+// the 30s the API accepts while bounding what one slow round trip can cost.
 const MAX_SLICE_SEC = 4;
 
 // How far ahead a spoken word may match: a short hop for ordinary progress, a
