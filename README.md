@@ -118,6 +118,14 @@ restructured and no code changes: Vercel looks for a FastAPI instance named
 
 **Deploy the API first** — the web app needs its URL at build time.
 
+**Prerequisite for the dashboard flow:** the Vercel GitHub App must be
+installed on this repository (<https://github.com/apps/vercel>). Only the
+repository *owner* can do that — a collaborator with push access cannot, and
+importing without it fails with "you need to install the GitHub integration
+first". Use the CLI flow below until that is done.
+
+Via the dashboard, once the app is installed:
+
 1. New Project → import this repo → **Root Directory: `scoring-service`**.
 2. Environment variables:
    - `SARVAM_API_KEY` — the same key as local
@@ -131,6 +139,29 @@ restructured and no code changes: Vercel looks for a FastAPI instance named
    Supabase variables from below.
 5. Go back and set `CORS_ORIGIN` on the API project to the web URL, then
    redeploy it.
+
+Via the CLI, which needs no GitHub App and is how the current deployment was
+made. `--cwd` rather than `cd`, because a failed `cd` silently deploys whatever
+directory the shell happened to be in:
+
+```bash
+npx vercel --cwd scoring-service link --yes --project shg-api
+npx vercel --cwd scoring-service deploy --prod --yes
+npx vercel --cwd web link --yes --project shg-web
+npx vercel --cwd web deploy --prod --yes
+```
+
+Set secrets by piping from the local env file rather than passing `--value`,
+which would put the key in your shell history:
+
+```bash
+grep '^SARVAM_API_KEY=' scoring-service/.env | cut -d= -f2- \
+  | npx vercel --cwd scoring-service env add SARVAM_API_KEY production --yes
+```
+
+The trade-off is that nothing redeploys on push: every change needs the deploy
+command again, from someone's machine. That is the reason to get the GitHub App
+installed rather than living on the CLI.
 
 **What makes this deployable at all** is `ASR_BACKEND=sarvam`: speech
 recognition becomes a network call, so `torch`, `faster-whisper`,
@@ -146,9 +177,15 @@ did not ship, and every passage is being re-synthesised and re-billed on every
 cold start — silently, because the audio still plays. The 12 clips are in the
 repo precisely to stop that.
 
-Live tracking sends a slice every 2 seconds, and each one is now a billed API
-call rather than free local GPU time. A full reading costs roughly ₹1 all in.
-Fine for a demo and for a classroom; worth measuring before a public launch.
+Live tracking sends a slice every 1.2 seconds, and each one is now a billed API
+call rather than free local GPU time. The bill tracks the length of the reading
+rather than the number of calls — each flush sends only new audio — so a full
+reading is roughly ₹1 all in. Fine for a demo and for a classroom; worth
+measuring before a public launch.
+
+Neither deployment is authenticated. Anyone with the URL can spend the Sarvam
+balance, so treat the deployed URL as a shared secret rather than a public one
+until there is a login.
 
 ## Supabase — for the streak to survive a cleared cache
 
