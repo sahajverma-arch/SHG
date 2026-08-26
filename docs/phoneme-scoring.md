@@ -32,6 +32,8 @@ Phoneme scoring was meant to close it.
 | `eval_gop.py` | the one-sided evaluation harness — run it to reproduce |
 | `eval_contrastive.py` | the two-way evaluation (Approach 3) |
 | `diag_aspiration.py` | the aspiration diagnostic — run this before trusting any new phone model with Hindi |
+| `eval_asr_modes.py` | does any ASR report what was *said* rather than what was *meant* (Approach 4) |
+| `sarvam_asr.py` | Saaras client, the four output modes, and why it is not the live tracker |
 | `test_pronunciation.py` | 39 tests over the parts that are correct |
 
 espeak-ng comes from the `espeakng-loader` package rather than a system
@@ -141,6 +143,68 @@ not deployable. The discriminative signal is real and strong; it sits on top of
 a per-speaker, per-word offset of the same size, and there is no labelled data
 to learn that offset from. Which is the same wall as before, now located
 precisely.
+
+### Approach 4 — ask the ASR not to tidy up
+
+*Measured 2026-08-26 with `eval_asr_modes.py`, against Sarvam's Saaras v3.*
+
+Everything above tries to hear phonemes directly. This asks a different
+question: the transcript scorer is blind to mispronunciation because Whisper
+*repairs* it — a child says रभीवार, Whisper writes रविवार, because that is the
+word that fits. What if an ASR could be told not to do that? Sarvam documents a
+`verbatim` mode as "word-for-word (with fillers)", which sounds like exactly
+that.
+
+Each of the 20 minimal pairs was rendered twice with Bulbul — once saying the
+real word, once saying the child's error — and put through every engine:
+
+| engine | caught | repaired | clean |
+| --- | --- | --- | --- |
+| Whisper (local, what ships) | 5/20 | 6/20 | 17/20 |
+| Saaras `transcribe` | 4/20 | 15/20 | 20/20 |
+| Saaras `verbatim` | 4/20 | 15/20 | 20/20 |
+
+`caught` = the rival word reached the transcript. `repaired` = the real word
+did, i.e. the error was erased. `clean` = correct audio still transcribed
+correctly, which guards against an engine that simply outputs noise.
+
+**`verbatim` does nothing for this.** It is identical to `transcribe` to within
+noise — the two differed by one case across two runs, in opposite directions.
+Whatever "with fillers" means, it does not mean "does not snap a non-word to
+the nearest real word". Sarvam is a *better* transcriber than Whisper here
+(20/20 clean against 17/20) and a *worse* detector (15/20 repaired against
+6/20), which is the same trade in a different place: the stronger the language
+model, the more thoroughly it erases the evidence.
+
+**But the information is not gone.** The same clips through `translit`, which
+emits Latin script instead of Devanagari:
+
+| | |
+| --- | --- |
+| mispronunciation produced a different romanised token | 12/20 |
+| minus cases where a *repeat render of the same text* also differed | 2 |
+| net signal | **10/20** |
+| noise floor (identical text, two renders, any token) | 4/20 |
+
+`janda`/`jhanda`, `dol`/`dhol`, `khaam`/`kaam`, `funny`/`paani`. The acoustic
+model heard the mispronunciation in every one of these — and then the
+conversion to Devanagari snapped it back to a real word. **The evidence is not
+lost in the microphone. It is lost in the spelling.** Romanised output is
+roughly 2.5× as sensitive as either Devanagari mode, at a measured noise floor.
+
+That noise floor is why the control matters and why the headline is 10 and not
+12: Bulbul runs at temperature 0.6, so the same sentence rendered twice is
+different audio, and two of the twelve "differences" were the ASR wobbling
+rather than hearing anything. Without re-rendering each sentence and diffing
+take 1 against take 2, this number is a measure of TTS temperature.
+
+**What this does not license.** Bulbul saying काना produces a *clean* काना; a
+six-year-old attempting खाना produces something smeared between the two. This
+is the easy version of the task, and the asymmetry only runs one way — failing
+it is conclusive, passing it is not. 10/20 on the easy version is not a
+shippable detector. It is a reason to think the ceiling is higher than the
+transcript scorer suggests, and one more argument for §3 below: the blocker is
+still recordings of real children.
 
 ## Why it is not shipped
 
@@ -273,6 +337,11 @@ judgement.
   frontier was examined. Settings with acceptable false positives detect
   nothing, and settings that detect anything accuse a correctly-read word more
   than once per reading.
+- **Sarvam's `verbatim` mode.** It reads as the obvious fix for the repair
+  confound and is not: identical to `transcribe` to within noise (4/20 against
+  4/20). Do not re-run this hoping for a different answer — but note that
+  `translit` on the same clips is a genuinely different result, and that one is
+  not a dead end. See Approach 4.
 - **Hunting for an off-the-shelf Hindi phoneme model.** Hugging Face and GitHub
   were searched; none exists publicly. Check again before assuming it is still
   true, but do not expect to find one.
@@ -284,6 +353,7 @@ pip install -r requirements-phonemes.txt
 python eval_gop.py <scratch-dir-with-fleurs-samples>          # one-sided
 python eval_contrastive.py <scratch-dir-with-fleurs-samples>  # two-way
 python diag_aspiration.py <scratch-dir-with-fleurs-samples>   # is the model deaf to aspiration?
+python eval_asr_modes.py <scratch-dir>                        # does any ASR keep the error? (needs SARVAM_API_KEY)
 python -m pytest test_pronunciation.py
 ```
 
