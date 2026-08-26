@@ -29,3 +29,5 @@ tts-prompts/
 # a second copy of the passage text that can drift from the table without
 # anything noticing - and a drifted line renders a clip nothing ever serves.
 passages.txt
+.vercel
+.env*

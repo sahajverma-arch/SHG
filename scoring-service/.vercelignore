@@ -1,0 +1,38 @@
+# What not to upload. Distinct from vercel.json's `excludeFiles`, which trims
+# the built function; this trims what leaves the machine in the first place.
+#
+# tts-cache/sarvam/ is deliberately NOT here. Those 12 clips are the reason a
+# deployed instance does not re-synthesise and re-bill every passage on every
+# cold start.
+
+# Secrets belong in Vercel's encrypted environment variables, never in the
+# uploaded bundle. Baked into a deployment a key cannot be rotated without a
+# redeploy, it is readable by anyone who can read the deployment source, and it
+# reaches places (build logs, artifacts) nobody audits. sarvam_tts reads .env
+# for local convenience only.
+.env
+.env.*
+
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# Converted Whisper weights, ~240MB. ASR_BACKEND=sarvam means the deployment
+# never loads them, and uploading them would be the slowest part of a deploy.
+models/
+
+# IndicF5 clips and their reference prompt: the fallback tier, rebuilt only on
+# a machine with a GPU and gated Hugging Face access.
+tts-cache/*.wav
+tts-prompts/
+
+# Measurement scripts and their fixtures. Kept in the repo because the numbers
+# in the code came from them; not needed to serve a request.
+test_*.py
+eval_*.py
+diag_*.py
+bench_*.py
+dump_*.py
+prerender_tts.py
+*.md
