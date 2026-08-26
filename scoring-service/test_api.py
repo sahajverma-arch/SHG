@@ -146,6 +146,25 @@ def test_transcribe_tolerates_an_empty_upload(client, monkeypatch):
 # /tts — which voice actually spoke
 # ---------------------------------------------------------------------------
 
+@pytest.fixture(autouse=True)
+def no_paid_calls(monkeypatch):
+    """No test may reach Sarvam. Every synthesis there is billed.
+
+    This is not hypothetical tidiness. Bulbul is a *tier*, not a replacement,
+    so it sits between the pre-rendered clip and edge-tts and is tried whenever
+    a key is present. Drop a real key in scoring-service/.env — which is the
+    documented way to configure one — and it is loaded at import, at which
+    point the plain fallback tests below would quietly start spending money and
+    then fail on a header they never expected to change.
+
+    Tests that want the Bulbul path opt in by patching over this.
+    """
+    import sarvam_tts
+
+    monkeypatch.setattr(sarvam_tts, "api_key", lambda: None)
+    monkeypatch.setattr(sarvam_tts, "find_cached", lambda _t, _s: None)
+
+
 def test_a_prerendered_clip_is_served_and_says_so(client, tmp_path, monkeypatch):
     import main
     import tts_cache
@@ -172,6 +191,118 @@ def test_falling_back_to_edge_tts_is_visible(client, monkeypatch):
     res = client.get("/tts", params={"text": "नमस्ते", "slow": "true"})
     assert res.status_code == 200
     assert res.headers["x-tts-source"] == f"edge-tts:{main.TTS_VOICE}"
+
+
+def test_a_cached_sarvam_clip_costs_nothing_to_serve(client, tmp_path, monkeypatch):
+    """The disk cache is what keeps a per-character bill from repeating.
+
+    Pressing "hear it first" four times must be one charge, not four, so a hit
+    here has to be served without `synthesise` ever being reached.
+    """
+    import main
+    import sarvam_tts
+
+    text = "बादल आसमान में तैर रहे हैं"
+    clip = tmp_path / "cached.wav"
+    clip.write_bytes(b"RIFF....WAVEcached")
+
+    monkeypatch.setattr(main, "find_prerendered", lambda _t: None)
+    monkeypatch.setattr(
+        sarvam_tts, "find_cached", lambda t, slow: clip if t == text else None
+    )
+
+    def fail(*_args, **_kwargs):
+        raise AssertionError("a cache hit must not be re-synthesised")
+
+    monkeypatch.setattr(sarvam_tts, "synthesise", fail)
+
+    res = client.get("/tts", params={"text": text})
+    assert res.status_code == 200
+    assert res.content == b"RIFF....WAVEcached"
+    assert res.headers["x-tts-source"].startswith("sarvam-cache:")
+
+
+def test_sarvam_speaks_for_a_passage_nobody_prerendered(client, monkeypatch):
+    """The gap this whole tier exists to close: only six passages were ever
+    rendered with IndicF5, and every other one used to drop to edge-tts."""
+    import main
+    import sarvam_tts
+
+    monkeypatch.setattr(main, "find_prerendered", lambda _t: None)
+    monkeypatch.setattr(sarvam_tts, "api_key", lambda: "test-key")
+    monkeypatch.setattr(sarvam_tts, "synthesise", lambda _t, _s: b"RIFF....WAVEbulbul")
+
+    res = client.get("/tts", params={"text": "एक नया वाक्य"})
+    assert res.status_code == 200
+    assert res.content == b"RIFF....WAVEbulbul"
+    assert res.headers["x-tts-source"] == f"sarvam:{sarvam_tts.MODEL}:{sarvam_tts.SPEAKER}"
+
+
+def test_a_dead_key_still_speaks(client, monkeypatch):
+    """An expired key or an empty balance must cost the child nothing.
+
+    `synthesise` returning None covers 401, 402, 429, timeouts and malformed
+    bodies alike — they all have to land on edge-tts rather than on a 503.
+    """
+    import main
+    import sarvam_tts
+
+    monkeypatch.setattr(main, "find_prerendered", lambda _t: None)
+    monkeypatch.setattr(sarvam_tts, "api_key", lambda: "expired-key")
+    monkeypatch.setattr(sarvam_tts, "synthesise", lambda _t, _s: None)
+    monkeypatch.setitem(main._TTS_CACHE, ("नमस्ते", True), b"fake-mp3")
+
+    res = client.get("/tts", params={"text": "नमस्ते", "slow": "true"})
+    assert res.status_code == 200
+    assert res.headers["x-tts-source"] == f"edge-tts:{main.TTS_VOICE}"
+
+
+def test_prefer_sarvam_overrides_a_prerendered_clip(client, tmp_path, monkeypatch):
+    """One app, one voice — when someone decides Bulbul is the better one."""
+    import main
+    import sarvam_tts
+
+    stale = tmp_path / "indicf5.wav"
+    stale.write_bytes(b"RIFF....WAVEindicf5")
+    monkeypatch.setattr(main, "find_prerendered", lambda _t: stale)
+    monkeypatch.setattr(main, "TTS_PREFER_SARVAM", True)
+    monkeypatch.setattr(sarvam_tts, "api_key", lambda: "test-key")
+    monkeypatch.setattr(sarvam_tts, "synthesise", lambda _t, _s: b"RIFF....WAVEbulbul")
+
+    res = client.get("/tts", params={"text": "सूरज पूरब से निकलता है"})
+    assert res.content == b"RIFF....WAVEbulbul"
+    assert res.headers["x-tts-source"].startswith("sarvam:")
+
+
+def test_the_slow_and_normal_readings_are_cached_apart(monkeypatch):
+    """Different audio, so sharing a key would be a wrong answer served
+    confidently rather than a miss that re-renders."""
+    import sarvam_tts
+
+    text = "धीरे धीरे पढ़ो"
+    assert sarvam_tts.cached_path(text, True) != sarvam_tts.cached_path(text, False)
+
+
+def test_env_file_gives_up_the_key_without_it_reaching_a_command_line(
+    tmp_path, monkeypatch
+):
+    """Quoted values are the classic way to spend an hour on a 401, and an
+    explicit environment variable has to keep winning over the file."""
+    import sarvam_tts
+
+    env = tmp_path / ".env"
+    env.write_text(
+        '# a comment\nSARVAM_API_KEY="quoted-key"\nALREADY_SET=from-file\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sarvam_tts, "__file__", str(tmp_path / "sarvam_tts.py"))
+    monkeypatch.delenv("SARVAM_API_KEY", raising=False)
+    monkeypatch.setenv("ALREADY_SET", "from-environment")
+
+    sarvam_tts._read_env_file()
+
+    assert os.environ["SARVAM_API_KEY"] == "quoted-key"
+    assert os.environ["ALREADY_SET"] == "from-environment"
 
 
 def test_health_counts_prerendered_clips(client):

@@ -10,9 +10,11 @@ from pathlib import Path
 
 import numpy as np
 from fastapi import FastAPI, Form, HTTPException, Response, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydub import AudioSegment
 
+import sarvam_tts
 from scoring import DEFAULT_LEVEL, score_attempt
 from tts_cache import PRERENDER_DIR, find_prerendered
 
@@ -295,6 +297,18 @@ def health():
         "tts_prerendered_clips": (
             len(list(PRERENDER_DIR.glob("*.wav"))) if PRERENDER_DIR.is_dir() else 0
         ),
+        # False means no SARVAM_API_KEY reached the process, and every passage
+        # without a pre-rendered clip is speaking in the robotic voice. That is
+        # the same invisible-downgrade trap as the count above: a missing key
+        # and a working one look identical from the outside.
+        "tts_sarvam_configured": sarvam_tts.configured(),
+        "tts_sarvam_voice": f"{sarvam_tts.MODEL}:{sarvam_tts.SPEAKER}",
+        "tts_sarvam_cached_clips": (
+            len(list(sarvam_tts.CACHE_DIR.glob("*.wav")))
+            if sarvam_tts.CACHE_DIR.is_dir()
+            else 0
+        ),
+        "tts_prefer_sarvam": TTS_PREFER_SARVAM,
     }
 
 
@@ -325,11 +339,22 @@ TTS_RATE_NORMAL = os.environ.get("TTS_RATE_NORMAL", "+0%")
 # press. The passages are a fixed set, though, so they can be rendered once
 # ahead of time and served instantly from disk. See prerender_tts.py.
 #
-# Anything without a pre-rendered file falls through to edge-tts as before, so
-# a passage nobody has rendered yet still speaks.
+# Anything without a pre-rendered file falls through to Sarvam's Bulbul, and
+# then to edge-tts, so a passage nobody has rendered yet still speaks.
 _TTS_CACHE: "OrderedDict[tuple[str, bool], bytes]" = OrderedDict()
 _TTS_CACHE_MAX = 32
 _TTS_MAX_CHARS = 800
+
+# Two good voices for one app is one too many. IndicF5 rendered six passages;
+# Bulbul renders everything, including those six if asked. Which of the two
+# should win where they overlap is a judgement to make by ear, not from the
+# model cards -- so it is a flag, and the default keeps clips already paid for
+# in GPU time. Set TTS_PREFER_SARVAM=1 to hear the whole app in one voice.
+TTS_PREFER_SARVAM = os.environ.get("TTS_PREFER_SARVAM", "").lower() in {
+    "1",
+    "true",
+    "yes",
+}
 
 
 @app.get("/tts")
@@ -345,16 +370,48 @@ async def tts(text: str, slow: bool = True):
     # that also means an empty tts-cache/ is indistinguishable from a working
     # pre-render, and someone checking the voice has no way to tell which one
     # they just heard. The header says.
-    pre = find_prerendered(text)
-    if pre is not None:
+    if not (TTS_PREFER_SARVAM and sarvam_tts.configured()):
+        pre = find_prerendered(text)
+        if pre is not None:
+            return Response(
+                content=pre.read_bytes(),
+                media_type="audio/wav",
+                headers={
+                    "Cache-Control": "public, max-age=86400",
+                    "X-TTS-Source": "prerendered",
+                },
+            )
+
+    # Bulbul: any passage, not just the six someone pre-rendered. Billed per
+    # character, so the disk cache is checked first and every rendered clip is
+    # kept -- see sarvam_tts for why that is not just an optimisation.
+    voice = f"{sarvam_tts.MODEL}:{sarvam_tts.SPEAKER}"
+    hit = sarvam_tts.find_cached(text, slow)
+    if hit is not None:
         return Response(
-            content=pre.read_bytes(),
+            content=hit.read_bytes(),
             media_type="audio/wav",
             headers={
                 "Cache-Control": "public, max-age=86400",
-                "X-TTS-Source": "prerendered",
+                "X-TTS-Source": f"sarvam-cache:{voice}",
             },
         )
+
+    if sarvam_tts.configured():
+        # urllib blocks, and blocking the event loop here would stall every
+        # other request behind one synthesis.
+        spoken = await run_in_threadpool(sarvam_tts.synthesise, text, slow)
+        if spoken:
+            return Response(
+                content=spoken,
+                media_type="audio/wav",
+                headers={
+                    "Cache-Control": "public, max-age=86400",
+                    "X-TTS-Source": f"sarvam:{voice}",
+                },
+            )
+        # Falls through on purpose. A bad key or an empty balance costs the
+        # child nothing: edge-tts still speaks, and the header still says so.
 
     key = (text, slow)
     cached = _TTS_CACHE.get(key)

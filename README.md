@@ -59,15 +59,49 @@ pace 6) come back from the scoring service.
 
 **3. The model reading — optional**
 
-"Listen" works immediately through edge-tts, over the network, no account. The
-markedly better IndicF5 voice is pre-rendered per passage and those clips are
-gitignored, so a fresh clone has none and every passage falls back. Rendering
-them needs a GPU, gated Hugging Face access and a second virtualenv — all of it
-in [scoring-service/README.md](scoring-service/README.md#pre-rendering-with-indicf5).
+"Listen" works immediately through edge-tts, over the network, no account, but
+audibly robotic. Two better voices sit in front of it, and `/tts` tries all
+three in order:
+
+| tier | voice | covers | cost |
+| --- | --- | --- | --- |
+| 1 | IndicF5, pre-rendered | only passages someone rendered | GPU time, once |
+| 2 | Sarvam Bulbul | anything | ~₹1 per passage, once |
+| 3 | edge-tts | anything | free |
+
+Tier 1 is the best of the three but cannot be produced on demand — IndicF5 is a
+0.4B flow-matching model, ~30s a sentence on a GPU — so its clips are rendered
+ahead of time. They are gitignored, so a fresh clone has none. That needs a
+GPU, gated Hugging Face access and a second virtualenv, all of it in
+[scoring-service/README.md](scoring-service/README.md#pre-rendering-with-indicf5).
+
+**Tier 2 is the one worth setting up**, because it needs none of that and
+covers every passage rather than six. Get a key at
+[dashboard.sarvam.ai](https://dashboard.sarvam.ai) (new accounts get ₹100 of
+credit) and put it in `scoring-service/.env`, which is gitignored:
+
+```
+SARVAM_API_KEY=...
+```
+
+Nothing else changes — no new Python packages, no restart flags. Each rendered
+clip is cached to `tts-cache/sarvam/`, so a passage is billed once and is free
+for every later play, across restarts. Check the key and pre-pay a demo's
+passages in one go:
+
+```bash
+python sarvam_tts.py --file passages.txt   # prints what it billed
+```
+
+Set `TTS_PREFER_SARVAM=1` to hear the whole app in one voice instead of Bulbul
+everywhere and IndicF5 on six passages. Which is better is a judgement to make
+by ear.
 
 Which voice you are actually hearing is checkable rather than guessable:
-`/health` reports `tts_prerendered_clips`, and `/tts` answers with an
-`X-TTS-Source` header.
+`/health` reports `tts_prerendered_clips`, `tts_sarvam_configured` and
+`tts_sarvam_cached_clips`, and `/tts` answers with an `X-TTS-Source` header
+naming the tier that spoke. A wrong key never breaks the button — it falls
+through to edge-tts and says so in that header.
 
 ## Supabase — for the streak to survive a cleared cache
 
