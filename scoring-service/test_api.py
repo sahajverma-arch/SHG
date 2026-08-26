@@ -346,6 +346,106 @@ def test_env_file_gives_up_the_key_without_it_reaching_a_command_line(
     assert os.environ["ALREADY_SET"] == "from-environment"
 
 
+# ---------------------------------------------------------------------------
+# The 30-second API cap — the thing between a slow reader and a working app
+# ---------------------------------------------------------------------------
+
+def test_short_audio_is_not_split(client):
+    """The common path must stay one request, and one charge."""
+    import numpy as np
+
+    import sarvam_asr
+
+    wav = np.zeros(16000 * 10, dtype=np.float32)
+    assert len(sarvam_asr.split_for_limit(wav, 16000)) == 1
+
+
+def test_a_slow_reader_is_split_rather_than_rejected(client):
+    """39s is a 46-word passage at 70 WPM — a child still learning to read.
+
+    Sending that whole would be a 400 from Sarvam. Four of the six stored
+    passages are over the cap at that pace, so this is the ordinary case for
+    the intended reader, not an edge case.
+    """
+    import numpy as np
+
+    import sarvam_asr
+
+    rate = 16000
+    wav = np.zeros(int(rate * 39), dtype=np.float32)
+    pieces = sarvam_asr.split_for_limit(wav, rate)
+
+    assert len(pieces) > 1
+    assert sum(p.size for p in pieces) == wav.size, "audio must not be dropped"
+    for piece in pieces:
+        assert piece.size <= rate * sarvam_asr.MAX_SECONDS, "a piece is still over the cap"
+
+
+def test_the_cut_lands_in_the_quiet_between_words(client):
+    """A cut through a word transcribes as two wrong words, which the rubric
+    then scores as two mispronunciations the child never made."""
+    import numpy as np
+
+    import sarvam_asr
+
+    rate = 16000
+    # Loud throughout, with one deliberate gap of silence late in the window
+    # where a fixed cut would otherwise land mid-"word".
+    wav = np.ones(int(rate * 40), dtype=np.float32) * 0.5
+    gap_start = int(rate * 26.5)
+    gap_end = int(rate * 27.0)
+    wav[gap_start:gap_end] = 0.0
+
+    first = sarvam_asr.split_for_limit(wav, rate)[0]
+    assert gap_start <= first.size <= gap_end, (
+        f"cut at {first.size / rate:.2f}s, expected inside the silence at "
+        f"{gap_start / rate:.2f}-{gap_end / rate:.2f}s"
+    )
+
+
+def test_pieces_are_joined_with_a_space(client, monkeypatch):
+    """Gluing the last word of one piece to the first of the next invents a
+    compound word, which the rubric scores as two errors."""
+    import numpy as np
+
+    import sarvam_asr
+
+    seen = []
+
+    def fake(audio, filename="clip.wav", mode="transcribe", language=None):
+        seen.append(filename)
+        return f"piece{len(seen)}"
+
+    monkeypatch.setattr(sarvam_asr, "transcribe_bytes", fake)
+    wav = np.zeros(int(16000 * 39), dtype=np.float32)
+
+    assert sarvam_asr.transcribe_long(wav, 16000) == "piece1 piece2"
+    assert len(seen) == 2
+
+
+def test_a_failed_chunk_is_raised_not_scored(client, monkeypatch):
+    """An empty transcript would be scored as a child who read nothing — a
+    wrong mark, which is worse than an error the app can show and retry."""
+    import numpy as np
+
+    import main
+    import sarvam_asr
+
+    monkeypatch.setattr(main, "ASR_BACKEND", "sarvam")
+    monkeypatch.setattr(main, "_asr", None)
+    monkeypatch.setattr(sarvam_asr, "api_key", lambda: "test-key")
+
+    def boom(*_a, **_k):
+        raise sarvam_asr.SarvamASRError("HTTP 429 from Sarvam")
+
+    monkeypatch.setattr(sarvam_asr, "transcribe_long", boom)
+
+    run = main.get_asr()
+    with pytest.raises(HTTPException) as caught:
+        run(np.zeros(16000, dtype=np.float32), 16000)
+    assert caught.value.status_code == 502
+
+
 def test_health_counts_prerendered_clips(client):
     body = client.get("/health").json()
     assert "tts_prerendered_clips" in body

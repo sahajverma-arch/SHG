@@ -129,7 +129,7 @@ export function readCount(expected: string[], heardText: string): number {
 }
 
 /** 16-bit PCM WAV — self-contained, and decoded server-side without ffmpeg. */
-function encodeWav(samples: Float32Array, sampleRate: number): Blob {
+export function encodeWav(samples: Float32Array, sampleRate: number): Blob {
   const buffer = new ArrayBuffer(44 + samples.length * 2);
   const view = new DataView(buffer);
   const ascii = (offset: number, text: string) => {

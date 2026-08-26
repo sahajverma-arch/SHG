@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ScoreLine } from "@/components/ScoreLine";
 import { pickPassage, saveAttempt, type Passage } from "@/lib/attempts";
-import { startLiveReading, words } from "@/lib/liveReading";
+import { encodeWav, startLiveReading, words } from "@/lib/liveReading";
 import { scoreAttempt, type ScoreResult } from "@/lib/scoring";
 import { speakHindi, stopSpeaking, whenVoicesReady } from "@/lib/speech";
 import { useStreak } from "@/lib/streak";
@@ -26,6 +26,45 @@ const SILENCE_MS = 2600;
 const COMPLETE_GRACE_MS = 900;
 // Nothing should record forever if detection fails outright.
 const MAX_RECORDING_MS = 180_000;
+
+/**
+ * Re-encode the recording as WAV before uploading it.
+ *
+ * MediaRecorder produces webm/opus, which the server can only decode by
+ * shelling out to ffmpeg — fine on a laptop, absent in a serverless function.
+ * WAV is decoded with the Python standard library, so this is what lets the
+ * scoring service deploy without a machine of its own.
+ *
+ * The browser already has a decoder (it has to, to play the file back), so
+ * this costs nothing but a few hundred milliseconds on a file this size, and
+ * it happens while the child is already looking at a "scoring" spinner. The
+ * live tracker has always sent WAV for the same reason; this brings the final
+ * upload in line with it.
+ */
+async function toWav(recorded: Blob): Promise<Blob> {
+  const ctx = new AudioContext();
+  try {
+    const decoded = await ctx.decodeAudioData(await recorded.arrayBuffer());
+    const channels = Array.from({ length: decoded.numberOfChannels }, (_, i) =>
+      decoded.getChannelData(i)
+    );
+    let mono = channels[0];
+    if (channels.length > 1) {
+      // Downmix rather than picking channel 0: a headset that records one side
+      // only would otherwise come back silent, and silent audio is scored as a
+      // child who read nothing.
+      mono = new Float32Array(decoded.length);
+      for (let i = 0; i < decoded.length; i++) {
+        let sum = 0;
+        for (const channel of channels) sum += channel[i];
+        mono[i] = sum / channels.length;
+      }
+    }
+    return encodeWav(mono, decoded.sampleRate);
+  } finally {
+    void ctx.close();
+  }
+}
 
 type Status = "idle" | "recording" | "scoring" | "done" | "error";
 
@@ -194,7 +233,7 @@ export default function ReadingAloudPage() {
       setStatus("scoring");
       try {
         const scored = await scoreAttempt(
-          new Blob(chunksRef.current, { type: "audio/webm" }),
+          await toWav(new Blob(chunksRef.current, { type: "audio/webm" })),
           passage.text_hi,
           { level: passage.level ?? DEFAULT_LEVEL }
         );

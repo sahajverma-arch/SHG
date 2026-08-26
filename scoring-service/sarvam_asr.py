@@ -25,6 +25,7 @@ Billed at ~Rs.30/hour of audio, so a 3s clip is about 2.5 paise. Cheap enough
 to sweep, not free enough to leave in a loop.
 """
 
+import io
 import json
 import mimetypes
 import os
@@ -32,6 +33,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+import wave
 from pathlib import Path
 
 # Shares the .env loader with the voice side: one key, read once, at import.
@@ -145,6 +147,94 @@ def transcribe_bytes(
 def transcribe_file(path: str | Path, mode: str = "transcribe", **kwargs) -> str:
     path = Path(path)
     return transcribe_bytes(path.read_bytes(), path.name, mode=mode, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# The 30-second cap
+# ---------------------------------------------------------------------------
+#
+# This is the part that decides whether the app works for the children it is
+# for. A 46-word passage is 28s at 100 WPM -- inside the cap -- and 39s at 70
+# WPM, which is what a child who is still learning to read actually sounds
+# like. Four of the six stored passages break at 70 WPM. Without splitting,
+# the app would fail hardest for exactly the readers who need it most.
+
+
+def wav_bytes(samples, rate: int) -> bytes:
+    """Mono float32 in [-1, 1] to 16-bit PCM wav, in memory."""
+    import numpy as np
+
+    pcm = (np.clip(samples, -1.0, 1.0) * 32767).astype("<i2")
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(rate)
+        handle.writeframes(pcm.tobytes())
+    return buffer.getvalue()
+
+
+def split_for_limit(samples, rate: int, max_seconds: float = MAX_SECONDS - 2):
+    """Cut audio into pieces the API will accept, preferring quiet moments.
+
+    A fixed cut every 28s would land mid-word about as often as not, and a word
+    sliced in half is transcribed as two wrong words -- which the rubric then
+    scores as two mispronunciations the child never made. So the cut is placed
+    at the quietest point in a window around the target, which in read speech
+    is the gap between words.
+
+    Returns a list of arrays; a short clip comes back as a single piece, so
+    callers do not need to special-case the common path.
+    """
+    import numpy as np
+
+    limit = int(max_seconds * rate)
+    if samples.size <= limit:
+        return [samples]
+
+    # Search the last quarter of each piece: far enough in to make progress,
+    # late enough that a cut is never much earlier than it had to be.
+    window = max(int(rate * 0.5), limit // 4)
+    pieces = []
+    start = 0
+    while samples.size - start > limit:
+        target = start + limit
+        lo = max(start + limit - window, start + rate)
+        chunk = samples[lo:target]
+        if chunk.size:
+            # Energy per 20ms frame; the quietest frame is the word gap.
+            frame = max(int(rate * 0.02), 1)
+            usable = chunk.size - chunk.size % frame
+            if usable >= frame:
+                energy = np.abs(chunk[:usable]).reshape(-1, frame).mean(axis=1)
+                cut = lo + int(energy.argmin()) * frame
+            else:
+                cut = target
+        else:
+            cut = target
+        pieces.append(samples[start:cut])
+        start = cut
+    if start < samples.size:
+        pieces.append(samples[start:])
+    return pieces
+
+
+def transcribe_long(samples, rate: int, mode: str = "transcribe") -> str:
+    """Transcribe audio of any length by splitting it past the API's cap.
+
+    Pieces are joined with a space rather than concatenated: the rubric
+    tokenises on whitespace, and gluing the last word of one piece to the first
+    of the next would invent a compound word that scores as two errors.
+    """
+    pieces = split_for_limit(samples, rate)
+    texts = []
+    for index, piece in enumerate(pieces):
+        text = transcribe_bytes(
+            wav_bytes(piece, rate), f"part{index}.wav", mode=mode
+        ).strip()
+        if text:
+            texts.append(text)
+    return " ".join(texts)
 
 
 if __name__ == "__main__":

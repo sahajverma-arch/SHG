@@ -1,0 +1,25 @@
+# Running the ASR on your own machine instead of paying Sarvam per hour.
+#
+#     pip install -r requirements.txt -r requirements-local.txt
+#     ASR_BACKEND=faster-whisper
+#
+# Worth it for development: a local GPU turns a 2s live slice around in well
+# under a second, offline and free, where the hosted call adds a network round
+# trip and bills for it. Not worth it for deployment -- torch alone is far past
+# what a serverless function may carry, which is the whole reason
+# ASR_BACKEND=sarvam exists.
+#
+# This also needs the converted weights; see README.md for the one-off
+# conversion command. Add requirements-gpu.txt on top for CUDA.
+
+# The CTranslate2 build of the Whisper weights. ~40x faster than transformers
+# on CPU (see README).
+faster-whisper
+
+# Needed to convert the weights, and for the ASR_BACKEND=transformers fallback.
+transformers
+torch
+
+# Decodes anything ffmpeg can, for audio that is not already WAV. The web app
+# uploads WAV, so this is only for hand-fed files and older clients.
+pydub

@@ -12,7 +12,20 @@ import numpy as np
 from fastapi import FastAPI, Form, HTTPException, Response, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from pydub import AudioSegment
+
+# pydub is optional, and that is what makes this deployable.
+#
+# It decodes anything, by shelling out to ffmpeg -- which exists on a laptop
+# and does not exist in a serverless function. The browser now uploads WAV for
+# both the live slices and the final recording, and WAV is decoded by
+# `_decode_pcm_wav` using nothing but the standard library. pydub is kept for
+# everything else that might arrive (a file dropped in by hand, an older
+# client) and its absence is reported clearly rather than as an import crash on
+# the first request.
+try:
+    from pydub import AudioSegment
+except ImportError:  # pragma: no cover - exercised by the deployment, not tests
+    AudioSegment = None
 
 import sarvam_tts
 from scoring import DEFAULT_LEVEL, score_attempt
@@ -203,6 +216,43 @@ def _load_transformers():
     return run
 
 
+def _load_sarvam():
+    """Hosted ASR. The backend that lets this deploy without a GPU.
+
+    Whisper is faster and free here -- a local 3060 turns a 2s slice around in
+    well under a second, offline -- but it needs torch, ~240MB of converted
+    weights and CUDA libraries, which is exactly what cannot go in a serverless
+    function. Sarvam is a network call and stdlib.
+
+    Two things differ from the local backends and both are visible to a reader:
+    every call costs money (~Rs.30/hour of audio, so roughly Rs.1 for a full
+    reading including live tracking), and the round trip adds latency the
+    tracker feels. `quick` is honoured only in that a live slice is already
+    short enough never to need splitting.
+    """
+    import sarvam_asr
+
+    if sarvam_asr.api_key() is None:
+        raise HTTPException(
+            503,
+            "ASR_BACKEND=sarvam needs SARVAM_API_KEY. Put it in "
+            "scoring-service/.env, or set it in the deployment's environment.",
+        )
+
+    def run(wav: np.ndarray, sr: int, quick: bool = False) -> str:
+        try:
+            return sarvam_asr.transcribe_long(wav, sr)
+        except sarvam_asr.SarvamASRError as exc:
+            # Loud on purpose. A silent empty transcript would be scored as a
+            # child who read nothing, which is a wrong mark rather than an
+            # error -- worse than a failure the app can show and retry.
+            raise HTTPException(502, f"Speech recognition failed: {exc}") from exc
+
+    global _asr_device, _asr_compute_type
+    _asr_device, _asr_compute_type = "sarvam", sarvam_asr.MODEL
+    return run
+
+
 def get_asr():
     global _asr
     if _asr is None:
@@ -210,6 +260,8 @@ def get_asr():
             _asr = _load_transformers()
         elif ASR_BACKEND == "faster-whisper":
             _asr = _load_faster_whisper()
+        elif ASR_BACKEND == "sarvam":
+            _asr = _load_sarvam()
         else:
             raise HTTPException(500, f"Unknown ASR_BACKEND {ASR_BACKEND!r}")
     return _asr
@@ -255,6 +307,14 @@ def load_audio(raw_bytes: bytes) -> tuple[np.ndarray, int]:
     samples = _decode_pcm_wav(raw_bytes)
     if samples is not None:
         return samples, SAMPLE_RATE
+
+    if AudioSegment is None:
+        raise HTTPException(
+            400,
+            "This audio is not 16-bit PCM WAV, and no decoder is installed. "
+            "The web app uploads WAV; a client sending webm or mp3 needs "
+            "pydub and ffmpeg on the server (see requirements-local.txt).",
+        )
 
     try:
         segment = AudioSegment.from_file(io.BytesIO(raw_bytes))

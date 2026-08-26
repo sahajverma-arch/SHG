@@ -1,23 +1,23 @@
+# What the deployed service needs, and nothing more.
+#
+# Everything here is pure Python or a small wheel, which is the point: with
+# ASR_BACKEND=sarvam both speech recognition and speech synthesis are network
+# calls, so the service carries no model weights and needs no GPU. That is what
+# makes it small enough for a serverless function.
+#
+# For local development against a GPU instead, add requirements-local.txt --
+# that is where torch, faster-whisper and the ~240MB of converted weights live.
+
 fastapi
 uvicorn[standard]
 python-multipart
-pydub
+
+# Audio arrives as 16-bit PCM WAV and is decoded with the standard library;
+# numpy is for the arithmetic on it -- resampling, silence detection, and
+# choosing where to split a reading that runs past Sarvam's 30-second cap.
 numpy
 
-# Default ASR backend: the CTranslate2 build of the same Whisper weights.
-# ~40x faster than transformers on CPU (see README).
-faster-whisper
-
-# Hindi speech for the "Hear it first" button. Browsers cannot be relied on
-# here — Windows ships no hi-IN voice at all.
-#
-# Drives Microsoft Edge's "Read aloud" neural voices over the same unofficial
-# channel the browser feature itself uses — free, no account, and noticeably
-# less robotic than Google Translate's TTS (gTTS).
+# The third TTS tier. Free and needs no account, so it is the voice that still
+# speaks if the Sarvam key is missing or its balance runs out. Small: it is an
+# HTTP client, not a model.
 edge-tts
-
-# Needed to convert the weights (one-off, see README) and for the fallback
-# ASR_BACKEND=transformers. Both are large; skip them if you already have a
-# converted model and don't want the fallback.
-transformers
-torch
